@@ -76,12 +76,19 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .md-content img{max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);margin:8px 0;display:block;background:#000}
 .katex-display{margin:8px 0;overflow-x:auto;overflow-y:hidden}
 
-/* Fullscreen Question Editor Modal */
+/* Fullscreen Question Editor Modal & Max-Width Document Container */
 .fs-modal{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;flex-direction:column}
 .fs-modal.open{display:flex}
-.fs-head{height:52px;border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;background:var(--surface)}
+.fs-head{height:52px;border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;background:var(--surface);flex-shrink:0}
 .fs-layout{flex:1;display:flex;overflow:hidden;position:relative}
-.fs-editor-pane{flex:1;display:flex;flex-direction:column;padding:18px;overflow-y:auto;gap:18px}
+
+/* Centered Document Pane */
+.fs-editor-pane{flex:1;display:flex;flex-direction:column;align-items:center;padding:24px 20px;overflow-y:auto;background:var(--bg);scroll-behavior:smooth}
+.fs-editor-content{width:min(960px, 100%);display:flex;flex-direction:column;gap:22px;margin:0 auto;transition:max-width 0.2s ease, margin 0.2s ease}
+
+/* Expand content smoothly when drawer opens */
+.fs-layout.drawer-open .fs-editor-content{width:100%;max-width:100%;margin:0}
+
 .fs-editor-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--surface2);padding:8px 12px;border-radius:6px;border:1px solid var(--border)}
 .fs-textarea{width:100%;min-height:140px;background:var(--surface2);color:#E5E7EB;border:1px solid var(--border);border-radius:6px;padding:12px;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical;outline:0}
 .fs-textarea:focus{border-color:var(--accent)}
@@ -216,74 +223,76 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <button onclick="closeEditorModal()">✕ Close</button>
     </div>
   </div>
-  <div class="fs-layout">
+  <div class="fs-layout" id="fsLayout">
     <div class="fs-editor-pane">
-      
-      <!-- Question Section -->
-      <div class="editor-box">
-        <div class="section-header">
-          <label style="margin:0;font-size:13px"><b>Question Statement (Markdown / LaTeX)</b></label>
-          <div class="view-toggle">
-            <button id="btnQRaw" class="view-btn" onclick="setSectionViewMode('Q', 'raw')">✏️ Edit (Raw)</button>
-            <button id="btnQSplit" class="view-btn active" onclick="setSectionViewMode('Q', 'split')">↔️ Split View</button>
-            <button id="btnQRendered" class="view-btn" onclick="setSectionViewMode('Q', 'rendered')">👁️ Rendered</button>
-          </div>
-        </div>
-
-        <div id="wrapQSplit" class="split-view mode-split">
-          <div class="editor-box-inner">
-            <div class="fs-editor-toolbar">
-              <button class="small" onclick="insertSnippet('edQText', '$', '$')">Math ($)</button>
-              <button class="small" onclick="insertSnippet('edQText', '$$\n', '\n$$')">Display Eq ($$)</button>
-              <button class="small" onclick="insertSnippet('edQText', '**', '**')">Bold</button>
-              <button class="small primary" onclick="openPdfCropperFor('edQText')">📷 Add Image (PDF)</button>
+      <div class="fs-editor-content">
+        
+        <!-- Question Section -->
+        <div class="editor-box">
+          <div class="section-header">
+            <label style="margin:0;font-size:13px"><b>Question Statement (Markdown / LaTeX)</b></label>
+            <div class="view-toggle">
+              <button id="btnQRaw" class="view-btn" onclick="setSectionViewMode('Q', 'raw')">✏️ Edit (Raw)</button>
+              <button id="btnQSplit" class="view-btn active" onclick="setSectionViewMode('Q', 'split')">↔️ Split View</button>
+              <button id="btnQRendered" class="view-btn" onclick="setSectionViewMode('Q', 'rendered')">👁️ Rendered</button>
             </div>
-            <textarea id="edQText" class="fs-textarea" style="min-height:140px" oninput="onEditorInput('edQText')"></textarea>
           </div>
-          <div class="preview-box">
-            <label style="font-size:11px;color:var(--muted)">Rendered Question Preview:</label>
-            <div id="edQPreview" class="md-content" style="background:var(--surface2);padding:12px;border-radius:6px;min-height:100px;border:1px solid var(--border)"></div>
-          </div>
-        </div>
 
-        <!-- Referenced Assets List for Question -->
-        <div id="edQAssetsStrip" class="asset-strip" style="display:none"></div>
-      </div>
-
-      <!-- Solution Section -->
-      <div class="editor-box" style="border-top:1px solid var(--border);padding-top:16px">
-        <div class="section-header">
-          <label style="margin:0;font-size:13px"><b>Publishing Solution (Markdown / LaTeX)</b></label>
-          <div class="view-toggle">
-            <button id="btnSolRaw" class="view-btn" onclick="setSectionViewMode('Sol', 'raw')">✏️ Edit (Raw)</button>
-            <button id="btnSolSplit" class="view-btn active" onclick="setSectionViewMode('Sol', 'split')">↔️ Split View</button>
-            <button id="btnSolRendered" class="view-btn" onclick="setSectionViewMode('Sol', 'rendered')">👁️ Rendered</button>
-          </div>
-        </div>
-
-        <div id="wrapSolSplit" class="split-view mode-split">
-          <div class="editor-box-inner">
-            <div class="fs-editor-toolbar">
-              <button class="small" onclick="insertSnippet('edSolText', '$', '$')">Math ($)</button>
-              <button class="small" onclick="insertSnippet('edSolText', '$$\n', '\n$$')">Display Eq ($$)</button>
-              <button class="small" onclick="insertSnippet('edSolText', '**Given:** ', '')">Given</button>
-              <button class="small" onclick="insertSnippet('edSolText', '**To Prove:** ', '')">To Prove</button>
-              <button class="small" onclick="insertSnippet('edSolText', '**Proof:**\n', '')">Proof</button>
-              <button class="small" onclick="insertSnippet('edSolText', '\\frac{', '}{}')">Fraction</button>
-              <button class="small primary" onclick="openPdfCropperFor('edSolText')">📷 Add Diagram (PDF)</button>
+          <div id="wrapQSplit" class="split-view mode-split">
+            <div class="editor-box-inner">
+              <div class="fs-editor-toolbar">
+                <button class="small" onclick="insertSnippet('edQText', '$', '$')">Math ($)</button>
+                <button class="small" onclick="insertSnippet('edQText', '$$\n', '\n$$')">Display Eq ($$)</button>
+                <button class="small" onclick="insertSnippet('edQText', '**', '**')">Bold</button>
+                <button class="small primary" onclick="openPdfCropperFor('edQText')">📷 Add Image (PDF)</button>
+              </div>
+              <textarea id="edQText" class="fs-textarea" style="min-height:140px" oninput="onEditorInput('edQText')"></textarea>
             </div>
-            <textarea id="edSolText" class="fs-textarea" style="min-height:180px" oninput="onEditorInput('edSolText')"></textarea>
+            <div class="preview-box">
+              <label style="font-size:11px;color:var(--muted)">Rendered Question Preview:</label>
+              <div id="edQPreview" class="md-content" style="background:var(--surface2);padding:12px;border-radius:6px;min-height:100px;border:1px solid var(--border)"></div>
+            </div>
           </div>
-          <div class="preview-box">
-            <label style="font-size:11px;color:var(--muted)">Rendered Solution Preview:</label>
-            <div id="edSolPreview" class="md-content" style="background:var(--surface2);padding:12px;border-radius:6px;min-height:100px;border:1px solid var(--border)"></div>
-          </div>
+
+          <!-- Referenced Assets List for Question -->
+          <div id="edQAssetsStrip" class="asset-strip" style="display:none"></div>
         </div>
 
-        <!-- Referenced Assets List for Solution -->
-        <div id="edSolAssetsStrip" class="asset-strip" style="display:none"></div>
-      </div>
+        <!-- Solution Section -->
+        <div class="editor-box" style="border-top:1px solid var(--border);padding-top:16px">
+          <div class="section-header">
+            <label style="margin:0;font-size:13px"><b>Publishing Solution (Markdown / LaTeX)</b></label>
+            <div class="view-toggle">
+              <button id="btnSolRaw" class="view-btn" onclick="setSectionViewMode('Sol', 'raw')">✏️ Edit (Raw)</button>
+              <button id="btnSolSplit" class="view-btn active" onclick="setSectionViewMode('Sol', 'split')">↔️ Split View</button>
+              <button id="btnSolRendered" class="view-btn" onclick="setSectionViewMode('Sol', 'rendered')">👁️ Rendered</button>
+            </div>
+          </div>
 
+          <div id="wrapSolSplit" class="split-view mode-split">
+            <div class="editor-box-inner">
+              <div class="fs-editor-toolbar">
+                <button class="small" onclick="insertSnippet('edSolText', '$', '$')">Math ($)</button>
+                <button class="small" onclick="insertSnippet('edSolText', '$$\n', '\n$$')">Display Eq ($$)</button>
+                <button class="small" onclick="insertSnippet('edSolText', '**Given:** ', '')">Given</button>
+                <button class="small" onclick="insertSnippet('edSolText', '**To Prove:** ', '')">To Prove</button>
+                <button class="small" onclick="insertSnippet('edSolText', '**Proof:**\n', '')">Proof</button>
+                <button class="small" onclick="insertSnippet('edSolText', '\\frac{', '}{}')">Fraction</button>
+                <button class="small primary" onclick="openPdfCropperFor('edSolText')">📷 Add Diagram (PDF)</button>
+              </div>
+              <textarea id="edSolText" class="fs-textarea" style="min-height:180px" oninput="onEditorInput('edSolText')"></textarea>
+            </div>
+            <div class="preview-box">
+              <label style="font-size:11px;color:var(--muted)">Rendered Solution Preview:</label>
+              <div id="edSolPreview" class="md-content" style="background:var(--surface2);padding:12px;border-radius:6px;min-height:100px;border:1px solid var(--border)"></div>
+            </div>
+          </div>
+
+          <!-- Referenced Assets List for Solution -->
+          <div id="edSolAssetsStrip" class="asset-strip" style="display:none"></div>
+        </div>
+
+      </div>
     </div>
 
     <!-- 40% PDF Thumbnail Drawer -->
@@ -442,7 +451,7 @@ let activePdfBuffer = null;
 let currentChapterId = 'c10_math_ch1';
 let questionsList = [];
 let activeEditingQ = null;
-let cropTargetField = 'edQText'; // Default target field for PDF cropping
+let cropTargetField = 'edQText'; // Target textarea field for cropping insertion
 
 // ---------------------------------------------------------------------------
 // 2. Settings & Configuration Management
@@ -811,7 +820,6 @@ function updateReferencedAssets(fieldId) {
 async function deleteAsset(assetPath, fieldId) {
   if (!confirm(`Delete image asset "${assetPath.replace(/^assets\//, '')}"?`)) return;
 
-  // 1. Remove Markdown tag from the active field or editor textareas
   if (fieldId) {
     const ta = $(fieldId);
     if (ta) {
@@ -828,16 +836,13 @@ async function deleteAsset(assetPath, fieldId) {
     });
   }
 
-  // 2. Remove from Session Map
   if (sessionAssets.has(assetPath)) {
     URL.revokeObjectURL(sessionAssets.get(assetPath));
     sessionAssets.delete(assetPath);
   }
 
-  // 3. Remove permanently from IndexedDB
   await storage.delete('assets', assetPath);
 
-  // 4. Refresh Previews & Asset Strips & Main Question List
   if (fieldId || activeEditingQ) {
     renderEditorPreviews();
     updateReferencedAssets('edQText');
@@ -862,7 +867,11 @@ function openEditor(qId) {
   badge.textContent = activeEditingQ.status === 'approved' ? '✓ Approved' : activeEditingQ.warn ? '⚠ Diagram Review' : 'Active';
 
   $('editorModal').classList.add('open');
-  $('pdfDrawer').classList.remove('open');
+  const drawer = $('pdfDrawer');
+  drawer.classList.remove('open');
+  const layout = $('fsLayout');
+  if (layout) layout.classList.remove('drawer-open');
+
   renderEditorPreviews();
   updateReferencedAssets('edQText');
   updateReferencedAssets('edSolText');
@@ -903,11 +912,14 @@ function solveActiveInEditor() {
 // ---------------------------------------------------------------------------
 async function togglePdfDrawer() {
   const drawer = $('pdfDrawer');
+  const layout = $('fsLayout');
   const isOpen = drawer.classList.contains('open');
   if (isOpen) {
     drawer.classList.remove('open');
+    if (layout) layout.classList.remove('drawer-open');
   } else {
     drawer.classList.add('open');
+    if (layout) layout.classList.add('drawer-open');
     renderPdfThumbnails();
   }
 }
