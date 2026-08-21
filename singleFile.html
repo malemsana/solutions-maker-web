@@ -1,0 +1,1308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Continua Solutions Studio — Pure Client Edition</title>
+
+<!-- PDF.js for in-browser PDF rendering -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+
+<!-- KaTeX for math formula rendering -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+
+<!-- Marked for Markdown parsing -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+
+<!-- JSZip for client-side asset packaging -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<!-- Google Material Symbols Outlined -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+
+<style>
+:root{
+  --bg:#0A0A0A;--surface:#121212;--surface2:#181818;--surface3:#242424;--border:#2D2D2D;
+  --text:#F3F4F6;--secondary:#9CA3AF;--muted:#6B7280;--accent:#2563EB;--accent-hover:#1D4ED8;
+  --success:#10B981;--error:#EF4444;--warning:#F59E0B;--purple:#8B5CF6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+body.modal-open{overflow:hidden !important}
+
+/* Material Symbols Adjustments */
+.material-symbols-outlined{font-size:18px;vertical-align:middle;display:inline-block;line-height:1}
+
+header{height:58px;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;max-width:1200px;margin:auto}
+header h1{font-size:16px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px}
+.tagline{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:2px 7px;border-radius:4px;font-weight:500}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+main{width:min(1100px,calc(100% - 32px));margin:0 auto;padding:20px 0 60px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:20px}
+h2{font-size:15px;font-weight:600;margin:0 0 4px}
+.description{font-size:12px;color:var(--secondary);margin:0}
+label{display:block;color:var(--secondary);font-size:11.5px;font-weight:500;margin-bottom:5px}
+input[type=text],input[type=number],select{width:100%;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px}
+input:focus,select:focus{outline:0;border-color:var(--accent)}
+
+button{background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 12px;cursor:pointer;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:.1s}
+button:hover{background:var(--surface3);border-color:#444}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{background:var(--accent-hover)}
+button.small{font-size:11.5px;padding:4px 8px;border-radius:4px}
+button.subtle{background:transparent;border-color:transparent;color:var(--secondary)}
+button.subtle:hover{background:var(--surface2);color:var(--text)}
+button:disabled{opacity:.45;cursor:not-allowed}
+
+.row{display:flex;gap:12px;align-items:end}.row>div{flex:1}
+.badge{font-size:10.5px;padding:2px 7px;border-radius:999px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
+.badge.warn{background:#381E05;color:#FCD34D;border:1px solid #78350F}
+.badge.ok{background:#06261C;color:#6EE7B7;border:1px solid #064E3B}
+.badge.approved{background:#1E3A8A;color:#93C5FD;border:1px solid #3B82F6}
+
+/* Grouping & Exercise Structure Styles */
+.group-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.group-header{background:var(--surface2);padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.group-title{font-size:14px;font-weight:600;color:#93C5FD;display:flex;align-items:center;gap:8px}
+.group-count{font-size:11px;color:var(--muted);background:var(--surface3);padding:2px 6px;border-radius:4px}
+
+/* Question List Cards */
+.q-list{padding:14px;display:flex;flex-direction:column;gap:12px}
+.q-card{background:#0D0D0D;border:1px solid var(--border);border-radius:8px;padding:14px;transition:border-color .12s}
+.q-card:hover{border-color:#444}
+.q-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.q-body{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:10px}
+.solution-view{margin-top:10px;background:#05070E;border:1px solid #1E293B;border-radius:6px;padding:12px}
+
+/* Markdown Typography */
+.md-content{font-size:13.5px;line-height:1.6;color:#E2E8F0}
+.md-content p{margin:0 0 6px}.md-content p:last-child{margin:0}
+.md-content img{max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);margin:8px 0;display:block;background:#000}
+.katex-display{margin:8px 0;overflow-x:auto;overflow-y:hidden}
+
+/* Fullscreen Question Editor Modal & Max-Width Document Container */
+.fs-modal{position:fixed;inset:0;height:100vh;width:100vw;background:var(--bg);z-index:40;display:none;flex-direction:column;overflow:hidden}
+.fs-modal.open{display:flex}
+.fs-head{height:52px;border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;justify-content:space-between;background:var(--surface);flex-shrink:0}
+.fs-layout{flex:1;display:flex;overflow:hidden;position:relative;height:calc(100vh - 52px)}
+
+/* Centered Document Pane */
+.fs-editor-pane{flex:1;display:flex;flex-direction:column;align-items:center;padding:24px 20px;overflow-y:auto;background:var(--bg);scroll-behavior:smooth;height:100%}
+.fs-editor-content{width:min(960px, 100%);display:flex;flex-direction:column;gap:22px;margin:0 auto;transition:max-width 0.2s ease, margin 0.2s ease}
+
+/* Expand content smoothly when drawer opens */
+.fs-layout.drawer-open .fs-editor-content{width:100%;max-width:100%;margin:0}
+
+.fs-editor-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:var(--surface2);padding:8px 12px;border-radius:6px;border:1px solid var(--border)}
+.fs-textarea{width:100%;min-height:140px;background:var(--surface2);color:#E5E7EB;border:1px solid var(--border);border-radius:6px;padding:12px;font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical;outline:0}
+.fs-textarea:focus{border-color:var(--accent)}
+
+/* Section View Controls & Flexible Split View */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.view-toggle{display:inline-flex;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px;gap:2px}
+.view-btn{background:transparent;color:var(--secondary);border:0;padding:4px 10px;font-size:11.5px;font-weight:500;border-radius:4px;cursor:pointer;transition:.1s;display:inline-flex;align-items:center;gap:4px}
+.view-btn.active{background:var(--accent);color:#fff;font-weight:600}
+
+.editor-box{display:flex;flex-direction:column;gap:8px}
+.split-view{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.split-view.mode-raw{grid-template-columns:1fr}
+.split-view.mode-raw .preview-box{display:none}
+.split-view.mode-rendered{grid-template-columns:1fr}
+.split-view.mode-rendered .editor-box-inner{display:none}
+.split-view.mode-split .editor-box-inner,.split-view.mode-split .preview-box{display:block}
+
+/* Asset Manager Strip */
+.asset-strip{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;padding:8px 12px;background:#080808;border:1px dashed var(--border);border-radius:8px;align-items:center}
+.asset-card{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;min-width:220px;max-width:320px}
+.asset-card img{width:42px;height:42px;object-fit:cover;border-radius:4px;border:1px solid var(--border);background:#000}
+.asset-card-info{flex:1;min-width:0;font-size:11px;color:var(--secondary)}
+.asset-card-name{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn-del-asset{background:#2A1212;border:1px solid #7F1D1D;color:#FCA5A5;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;transition:.12s;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.btn-del-asset:hover{background:#991B1B;color:#FFF}
+
+/* Interactive Rendered Preview Image Overlay */
+.img-preview-container{position:relative;display:inline-block;max-width:100%;margin:8px 0}
+.img-preview-container img{display:block;margin:0}
+.img-del-overlay{position:absolute;top:8px;right:8px;background:rgba(220,38,38,0.92);color:#fff;border:0;border-radius:4px;padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer;opacity:0;transition:opacity .15s,background .12s;box-shadow:0 2px 8px rgba(0,0,0,0.6);display:inline-flex;align-items:center;gap:4px}
+.img-preview-container:hover .img-del-overlay{opacity:1}
+.img-del-overlay:hover{background:#b91c1c}
+
+/* 40% PDF Page Drawer & 2-Column Compact High-DPI Grid */
+.pdf-drawer{width:40%;min-width:360px;max-width:500px;border-left:1px solid var(--border);background:var(--surface);display:none;flex-direction:column;height:100%}
+.pdf-drawer.open{display:flex}
+.pdf-drawer-head{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.pdf-thumbnails{flex:1;overflow-y:auto;padding:12px;display:grid;grid-template-columns:repeat(2, 1fr);gap:10px;align-content:start}
+.thumb-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px;text-align:center;cursor:pointer;transition:.12s;display:flex;flex-direction:column;gap:4px}
+.thumb-card:hover{border-color:var(--accent);background:var(--surface3)}
+.thumb-card canvas{width:100%;height:auto;display:block;border-radius:4px;background:#fff}
+
+/* High-DPI Cropper Modal */
+.cropper-modal{position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:60;display:none;flex-direction:column;overflow:hidden}
+.cropper-modal.open{display:flex}
+.cropper-head{height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;background:#111;border-bottom:1px solid var(--border);flex-shrink:0}
+.cropper-canvas-wrap{flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px;position:relative}
+.crop-container{position:relative;display:inline-block;box-shadow:0 10px 40px rgba(0,0,0,0.8)}
+#cropCanvas{display:block;background:#fff}
+.selection-box{position:absolute;border:2px dashed #3B82F6;background:rgba(59,130,246,0.25);display:none;pointer-events:none}
+
+/* Settings Modal Overlay */
+.overlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center}
+.overlay.open{display:flex}
+.overlay-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(2px)}
+.modal-panel{position:relative;width:min(520px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,0.6)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.field-group{margin-bottom:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Continua Solutions Studio <span class="tagline">Pure Client Edition</span></h1>
+  <div class="header-actions">
+    <button onclick="openSettingsModal()"><span class="material-symbols-outlined">settings</span> Settings</button>
+    <button class="primary" id="exportBtn" onclick="exportContinuaBundle()"><span class="material-symbols-outlined">package_2</span> Export Package</button>
+  </div>
+</header>
+
+<main>
+<section class="card">
+  <h2>Chapter Details &amp; PDF Intake</h2>
+  <div class="description" style="margin-bottom:12px">Upload the chapter textbook PDF. Gemini extracts questions into exercises/sections and flags image-dependent problems.</div>
+  <div class="row">
+    <div><label>Class Level</label><input id="classNum" type="text" value="10"></div>
+    <div>
+      <label>Subject</label>
+      <select id="subjectName">
+        <option value="Mathematics">Mathematics (math)</option>
+        <option value="Physics">Physics (phy)</option>
+        <option value="Chemistry">Chemistry (chem)</option>
+        <option value="Biology">Biology (bio)</option>
+        <option value="Science">Science (sci)</option>
+        <option value="Social Science">Social Science (sst)</option>
+        <option value="English">English (eng)</option>
+      </select>
+    </div>
+    <div><label>Chapter Title</label><input id="chapterName" type="text" placeholder="e.g. Real Numbers"></div>
+    <div><label>Chapter No.</label><input id="chapterNum" type="text" value="1"></div>
+  </div>
+  <div class="row" style="margin-top:14px">
+    <div>
+      <label>Chapter Textbook PDF</label>
+      <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" onchange="handlePdfUpload(event)">
+      <button onclick="$('pdfFileInput').click()"><span class="material-symbols-outlined">picture_as_pdf</span> Choose Chapter PDF</button>
+      <span id="pdfFileLabel" style="font-size:12px;color:var(--secondary);margin-left:8px">No PDF loaded</span>
+    </div>
+    <div style="text-align:right">
+      <button class="primary" id="extractBtn" onclick="extractQuestionsWithGemini()" disabled><span class="material-symbols-outlined">auto_awesome</span> Extract Questions (Gemini)</button>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="row" style="align-items:center;margin-bottom:12px">
+    <div>
+      <h2>Chapter Exercises &amp; Questions</h2>
+      <div id="statsLabel" class="description">0 questions loaded</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="solveAllPending()"><span class="material-symbols-outlined">bolt</span> Solve All Pending</button>
+    </div>
+  </div>
+  <div id="groupsContainer">
+    <div style="text-align:center;padding:40px;color:var(--muted)">No questions loaded. Upload a Chapter PDF and click <b>Extract Questions</b>.</div>
+  </div>
+</section>
+</main>
+
+<!-- Fullscreen Question Editor Modal -->
+<div id="editorModal" class="fs-modal">
+  <div class="fs-head">
+    <div style="display:flex;align-items:center;gap:10px">
+      <b id="edQNum">Exercise Question</b>
+      <span id="edQBadge" class="badge"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button onclick="solveActiveInEditor()"><span class="material-symbols-outlined">bolt</span> Solve with Gemini</button>
+      <button class="primary" onclick="saveAndApproveActiveQuestion()"><span class="material-symbols-outlined">check_circle</span> Approve &amp; Save</button>
+      <button onclick="closeEditorModal()"><span class="material-symbols-outlined">close</span> Close</button>
+    </div>
+  </div>
+  <div class="fs-layout" id="fsLayout">
+    <div class="fs-editor-pane">
+      <div class="fs-editor-content">
+        
+        <!-- Question Section -->
+        <div class="editor-box">
+          <div class="section-header">
+            <label style="margin:0;font-size:13px"><b>Question Statement (Markdown / LaTeX)</b></label>
+            <div class="view-toggle">
+              <button id="btnQRaw" class="view-btn" onclick="setSectionViewMode('Q', 'raw')"><span class="material-symbols-outlined">code</span> Edit (Raw)</button>
+              <button id="btnQSplit" class="view-btn active" onclick="setSectionViewMode('Q', 'split')"><span class="material-symbols-outlined">vertical_split</span> Split View</button>
+              <button id="btnQRendered" class="view-btn" onclick="setSectionViewMode('Q', 'rendered')"><span class="material-symbols-outlined">visibility</span> Rendered</button>
+            </div>
+          </div>
+
+          <div id="wrapQSplit" class="split-view mode-split">
+            <div class="editor-box-inner">
+              <div class="fs-editor-toolbar">
+                <button class="small" onclick="insertSnippet('edQText', '$', '$')">Math ($)</button>
+                <button class="small" onclick="insertSnippet('edQText', '$$\n', '\n$$')">Display Eq ($$)</button>
+                <button class="small" onclick="insertSnippet('edQText', '**', '**')">Bold</button>
+                <button class="small primary" onclick="openPdfCropperFor('edQText')"><span class="material-symbols-outlined">add_photo_alternate</span> Add Image (PDF)</button>
+              </div>
+              <textarea id="edQText" class="fs-textarea" style="min-height:140px" oninput="onEditorInput('edQText')"></textarea>
+            </div>
+            <div class="preview-box">
+              <label style="font-size:11px;color:var(--muted)">Rendered Question Preview:</label>
+              <div id="edQPreview" class="md-content" style="background:var(--surface2);padding:12px;border-radius:6px;min-height:100px;border:1px solid var(--border)"></div>
+            </div>
+          </div>
+
+          <!-- Referenced Assets List for Question -->
+          <div id="edQAssetsStrip" class="asset-strip" style="display:none"></div>
+        </div>
+
+        <!-- Solution Section -->
+        <div class="editor-box" style="border-top:1px solid var(--border);padding-top:16px">
+          <div class="section-header">
+            <label style="margin:0;font-size:13px"><b>Publishing Solution (Markdown / LaTeX)</b></label>
+            <div class="view-toggle">
+              <button id="btnSolRaw" class="view-btn" onclick="setSectionViewMode('Sol', 'raw')"><span class="material-symbols-outlined">code</span> Edit (Raw)</button>
+              <button id="btnSolSplit" class="view-btn active" onclick="setSectionViewMode('Sol', 'split')"><span class="material-symbols-outlined">vertical_split</span> Split View</button>
+              <button id="btnSolRendered" class="view-btn" onclick="setSectionViewMode('Sol', 'rendered')"><span class="material-symbols-outlined">visibility</span> Rendered</button>
+            </div>
+          </div>
+
+          <div id="wrapSolSplit" class="split-view mode-split">
+            <div class="editor-box-inner">
+              <div class="fs-editor-toolbar">
+                <button class="small" onclick="insertSnippet('edSolText', '$', '$')">Math ($)</button>
+                <button class="small" onclick="insertSnippet('edSolText', '$$\n', '\n$$')">Display Eq ($$)</button>
+                <button class="small" onclick="insertSnippet('edSolText', '**Given:** ', '')">Given</button>
+                <button class="small" onclick="insertSnippet('edSolText', '**To Prove:** ', '')">To Prove</button>
+                <button class="small" onclick="insertSnippet('edSolText', '**Proof:**\n', '')">Proof</button>
+                <button class="small" onclick="insertSnippet('edSolText', '\\frac{', '}{}')">Fraction</button>
+                <button class="small primary" onclick="openPdfCropperFor('edSolText')"><span class="material-symbols-outlined">add_photo_alternate</span> Add Diagram (PDF)</button>
+              </div>
+              <textarea id="edSolText" class="fs-textarea" style="min-height:180px" oninput="onEditorInput('edSolText')"></textarea>
+            </div>
+            <div class="preview-box">
+              <label style="font-size:11px;color:var(--muted)">Rendered Solution Preview:</label>
+              <div id="edSolPreview" class="md-content" style="background:var(--surface2);padding:12px;border-radius:6px;min-height:100px;border:1px solid var(--border)"></div>
+            </div>
+          </div>
+
+          <!-- Referenced Assets List for Solution -->
+          <div id="edSolAssetsStrip" class="asset-strip" style="display:none"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 40% PDF Thumbnail Drawer -->
+    <div id="pdfDrawer" class="pdf-drawer">
+      <div class="pdf-drawer-head">
+        <b>Select PDF Page to Crop</b>
+        <button class="small" onclick="togglePdfDrawer()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div id="pdfThumbnails" class="pdf-thumbnails">
+        <div style="color:var(--muted);text-align:center;padding:20px;grid-column:1/-1">Loading PDF pages...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- High-DPI Cropper Modal -->
+<div id="cropperModal" class="cropper-modal">
+  <div class="cropper-head">
+    <span id="cropperPageTitle" style="font-weight:600">High-DPI Cropper — Page 1</span>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeCropperModal()">Cancel</button>
+      <button class="primary" onclick="confirmCropAndInsert()"><span class="material-symbols-outlined">crop</span> Crop &amp; Insert as WebP</button>
+    </div>
+  </div>
+  <div class="cropper-canvas-wrap" id="cropWrap">
+    <div class="crop-container" id="cropContainer">
+      <canvas id="cropCanvas"></canvas>
+      <div id="selectionBox" class="selection-box"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal Overlay -->
+<div id="settingsModal" class="overlay">
+  <div class="overlay-backdrop" onclick="closeSettingsModal()"></div>
+  <div class="modal-panel">
+    <div class="modal-head">
+      <h2 style="margin:0">Pipeline Settings &amp; Models</h2>
+      <button class="subtle small" onclick="closeSettingsModal()"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    
+    <div class="field-group">
+      <label>Gemini API Key</label>
+      <input type="text" id="cfgApiKey" placeholder="AIzaSy...">
+      <div class="description" style="margin-top:4px">Stored locally in your browser (localStorage).</div>
+    </div>
+
+    <div class="field-group">
+      <label>Extraction Model ID</label>
+      <input type="text" id="cfgExtractModel" value="gemini-2.5-flash">
+      <div class="description" style="margin-top:4px">Model used to parse chapter PDF into structured exercises/questions.</div>
+    </div>
+
+    <div class="field-group">
+      <label>Solving Model ID</label>
+      <input type="text" id="cfgSolveModel" value="gemini-2.5-flash">
+      <div class="description" style="margin-top:4px">Model used for single-pass multimodal solution generation.</div>
+    </div>
+
+    <div class="row" style="margin-bottom:14px">
+      <div>
+        <label>WebP Compression Quality (0.5 - 1.0)</label>
+        <input type="number" id="cfgWebpQuality" min="0.5" max="1.0" step="0.05" value="0.80">
+      </div>
+      <div>
+        <label>Cropper DPI Render Scale</label>
+        <select id="cfgCropScale">
+          <option value="2.0">2.0x (Crisp Standard)</option>
+          <option value="2.5" selected>2.5x (High-DPI Math)</option>
+          <option value="3.0">3.0x (Ultra Sharp)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button onclick="closeSettingsModal()">Cancel</button>
+      <button class="primary" onclick="saveSettings()">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// Helper to lock body scroll when modals open
+function setModalBodyLock(isLocked) {
+  document.body.classList.toggle('modal-open', isLocked);
+}
+
+// ---------------------------------------------------------------------------
+// 1. IndexedDB Persistence Architecture
+// ---------------------------------------------------------------------------
+const DB_NAME = 'ContinuaSolutionsDB';
+const DB_VERSION = 1;
+
+class AppStorage {
+  async init() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('chapters')) db.createObjectStore('chapters', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('questions')) {
+          const q = db.createObjectStore('questions', { keyPath: 'id' });
+          q.createIndex('chapterId', 'chapterId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('assets')) {
+          const a = db.createObjectStore('assets', { keyPath: 'path' });
+          a.createIndex('chapterId', 'chapterId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains('raw_files')) db.createObjectStore('raw_files', { keyPath: 'id' });
+      };
+      req.onsuccess = e => { this.db = e.target.result; resolve(this.db); };
+      req.onerror = e => reject(e.target.error);
+    });
+  }
+
+  async put(store, data) {
+    return new Promise((res, rej) => {
+      const tx = this.db.transaction(store, 'readwrite');
+      tx.objectStore(store).put(data);
+      tx.oncomplete = () => res(true);
+      tx.onerror = e => rej(e.target.error);
+    });
+  }
+
+  async get(store, key) {
+    return new Promise((res, rej) => {
+      const tx = this.db.transaction(store, 'readonly');
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => res(req.result);
+      req.onerror = e => rej(e.target.error);
+    });
+  }
+
+  async getAllByIndex(store, index, val) {
+    return new Promise((res, rej) => {
+      const tx = this.db.transaction(store, 'readonly');
+      const req = tx.objectStore(store).index(index).getAll(val);
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = e => rej(e.target.error);
+    });
+  }
+
+  async delete(store, key) {
+    return new Promise((res, rej) => {
+      const tx = this.db.transaction(store, 'readwrite');
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = () => res(true);
+      tx.onerror = e => rej(e.target.error);
+    });
+  }
+}
+
+const storage = new AppStorage();
+const sessionAssets = new Map(); // path -> objectUrl
+
+// Global State
+let activePdfDoc = null;
+let activePdfBuffer = null;
+let currentChapterId = 'c10_math_ch1';
+let questionsList = [];
+let activeEditingQ = null;
+let cropTargetField = 'edQText'; // Target textarea field for cropping insertion
+
+// ---------------------------------------------------------------------------
+// 2. Settings & Configuration Management
+// ---------------------------------------------------------------------------
+function openSettingsModal() {
+  $('cfgApiKey').value = localStorage.getItem('gemini_api_key') || '';
+  $('cfgExtractModel').value = localStorage.getItem('gemini_extract_model') || 'gemini-2.5-flash';
+  $('cfgSolveModel').value = localStorage.getItem('gemini_solve_model') || 'gemini-2.5-flash';
+  $('cfgWebpQuality').value = localStorage.getItem('webp_quality') || '0.80';
+  $('cfgCropScale').value = localStorage.getItem('cropper_scale') || '2.5';
+  $('settingsModal').classList.add('open');
+  setModalBodyLock(true);
+}
+
+function closeSettingsModal() {
+  $('settingsModal').classList.remove('open');
+  if (!$('editorModal').classList.contains('open') && !$('cropperModal').classList.contains('open')) {
+    setModalBodyLock(false);
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem('gemini_api_key', $('cfgApiKey').value.trim());
+  localStorage.setItem('gemini_extract_model', $('cfgExtractModel').value.trim() || 'gemini-2.5-flash');
+  localStorage.setItem('gemini_solve_model', $('cfgSolveModel').value.trim() || 'gemini-2.5-flash');
+  localStorage.setItem('webp_quality', $('cfgWebpQuality').value.trim() || '0.80');
+  localStorage.setItem('cropper_scale', $('cfgCropScale').value || '2.5');
+  closeSettingsModal();
+}
+
+function getApiKey() {
+  return localStorage.getItem('gemini_api_key') || '';
+}
+
+function getChapterId() {
+  const cls = $('classNum').value.trim() || '10';
+  const subMap = { 'Mathematics':'math', 'Physics':'phy', 'Chemistry':'chem', 'Biology':'bio', 'Science':'sci', 'Social Science':'sst', 'English':'eng' };
+  const sub = subMap[$('subjectName').value] || 'gen';
+  const ch = $('chapterNum').value.trim() || '1';
+  return `c${cls}_${sub}_ch${ch}`;
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await storage.init();
+  if (!getApiKey()) openSettingsModal();
+  await loadActiveChapterData();
+});
+
+async function loadActiveChapterData() {
+  currentChapterId = getChapterId();
+  
+  // Hydrate Questions
+  questionsList = await storage.getAllByIndex('questions', 'chapterId', currentChapterId);
+
+  // Hydrate Assets
+  const assets = await storage.getAllByIndex('assets', 'chapterId', currentChapterId);
+  sessionAssets.clear();
+  assets.forEach(a => {
+    sessionAssets.set(a.path, URL.createObjectURL(a.blob));
+  });
+
+  // Hydrate Source PDF
+  const rawPdf = await storage.get('raw_files', `pdf_${currentChapterId}`);
+  if (rawPdf) {
+    activePdfBuffer = rawPdf.data;
+    activePdfDoc = await pdfjsLib.getDocument({ data: activePdfBuffer.slice(0) }).promise;
+    $('pdfFileLabel').textContent = `${rawPdf.name} (${activePdfDoc.numPages} pages)`;
+    $('extractBtn').disabled = false;
+  }
+
+  renderQuestionList();
+}
+
+// ---------------------------------------------------------------------------
+// 3. PDF Upload & In-Browser Parsing
+// ---------------------------------------------------------------------------
+async function handlePdfUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  currentChapterId = getChapterId();
+  activePdfBuffer = await file.arrayBuffer();
+  
+  await storage.put('raw_files', {
+    id: `pdf_${currentChapterId}`,
+    name: file.name,
+    data: activePdfBuffer,
+    updatedAt: Date.now()
+  });
+
+  activePdfDoc = await pdfjsLib.getDocument({ data: activePdfBuffer.slice(0) }).promise;
+  $('pdfFileLabel').textContent = `${file.name} (${activePdfDoc.numPages} pages)`;
+  $('extractBtn').disabled = false;
+}
+
+// ---------------------------------------------------------------------------
+// 4. Exercise Group-Aware Gemini In-Browser Extraction
+// ---------------------------------------------------------------------------
+async function extractQuestionsWithGemini() {
+  const key = getApiKey();
+  if (!key) { openSettingsModal(); return; }
+  if (!activePdfBuffer) return;
+
+  const modelId = localStorage.getItem('gemini_extract_model') || 'gemini-2.5-flash';
+
+  $('extractBtn').disabled = true;
+  $('extractBtn').textContent = `Extracting with ${modelId}...`;
+
+  try {
+    let binary = '';
+    const bytes = new Uint8Array(activePdfBuffer);
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+    const base64Pdf = btoa(binary);
+
+    const extractionPrompt = `You are the primary extraction stage of an NCERT textbook digitized publishing pipeline.
+
+Your task is to transcribe and structure ALL exercises and numbered questions from the supplied PDF document into organized EXERCISE GROUPS conforming to Continua Studio's NCERT_SOLUTIONS JSON standard.
+
+KNOWLEDGE OF QUESTION GROUPING & EXERCISES:
+1. NCERT chapters are strictly divided into groups/exercises, such as:
+   - "Exercise 1.1", "Exercise 1.2", "Exercise 1.3"
+   - "In-text Questions (Page X)"
+   - "Miscellaneous Exercise"
+2. Group all questions under their exact printed exercise title in "friendlyName".
+3. Maintain 1-based sequential "displayOrder" for each group (1 for first exercise, 2 for second, etc.).
+4. Maintain 1-based sequential "displayOrder" for each question within its group.
+5. Preserve mathematical notation using clean text or LaTeX ($...$).
+6. If a question contains a diagram, geometry figure, graph, circuit, ray diagram, or visual element necessary to understand or solve:
+   - set warn="yes";
+   - record the estimated 1-based pageNumber where the diagram appears.
+   - Otherwise set warn="no".
+7. Extract MCQ choices into "options" array if present. For subjective questions, return empty array [].
+
+Return ONLY a JSON object matching the requested schema.`;
+
+    const payload = {
+      system_instruction: {
+        parts: [{ text: extractionPrompt }]
+      },
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: 'application/pdf', data: base64Pdf } },
+          { text: 'Extract all exercise groups and questions from this textbook chapter in sequential order.' }
+        ]
+      }],
+      generationConfig: {
+        temperature: 0.0,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            groups: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  friendlyName: { type: 'string', description: 'Exercise title e.g. "Exercise 1.1"' },
+                  displayOrder: { type: 'integer' },
+                  questions: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        displayOrder: { type: 'integer' },
+                        number: { type: 'string', description: 'Question number e.g. "1" or "2 (a)"' },
+                        questionText: { type: 'string' },
+                        pageNumber: { type: 'integer' },
+                        warn: { type: 'string', enum: ['yes', 'no'] },
+                        options: { type: 'array', items: { type: 'string' } }
+                      },
+                      required: ['number', 'questionText', 'warn']
+                    }
+                  }
+                },
+                required: ['friendlyName', 'questions']
+              }
+            }
+          },
+          required: ['groups']
+        }
+      }
+    };
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const parsed = JSON.parse(data.candidates[0].content.parts[0].text);
+
+    questionsList = [];
+    let qCounter = 1;
+
+    (parsed.groups || []).forEach((grp, gIdx) => {
+      const exerciseTitle = grp.friendlyName || `Exercise ${gIdx + 1}`;
+      (grp.questions || []).forEach((q, qIdx) => {
+        questionsList.push({
+          id: `q_${Date.now()}_${qCounter++}`,
+          chapterId: currentChapterId,
+          exercise: exerciseTitle,
+          groupOrder: grp.displayOrder || (gIdx + 1),
+          qOrder: q.displayOrder || (qIdx + 1),
+          number: q.number || String(qIdx + 1),
+          pageNumber: q.pageNumber || 1,
+          questionText: q.questionText || '',
+          solutionText: '',
+          options: q.options || [],
+          warn: q.warn === 'yes',
+          status: 'extracted',
+          lastModified: Date.now()
+        });
+      });
+    });
+
+    for (const q of questionsList) {
+      await storage.put('questions', q);
+    }
+
+    renderQuestionList();
+  } catch (err) {
+    alert('Extraction failed: ' + err.message);
+  } finally {
+    $('extractBtn').disabled = false;
+    $('extractBtn').textContent = 'Extract Questions (Gemini)';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. Direct Gemini Multimodal Solver
+// ---------------------------------------------------------------------------
+async function solveQuestion(qId) {
+  const q = questionsList.find(x => x.id === qId);
+  if (!q) return;
+
+  const key = getApiKey();
+  if (!key) { openSettingsModal(); return; }
+
+  const modelId = localStorage.getItem('gemini_solve_model') || 'gemini-2.5-flash';
+
+  q.status = 'solving';
+  renderQuestionList();
+
+  try {
+    const parts = [];
+
+    // Multimodal check: Inspect if Question Markdown contains cropped assets
+    const imgMatches = [...q.questionText.matchAll(/!\[.*?\]\((assets\/.*?)\)/g)];
+    for (const match of imgMatches) {
+      const assetPath = match[1];
+      const storedAsset = await storage.get('assets', assetPath);
+      if (storedAsset && storedAsset.blob) {
+        const base64Img = await blobToBase64(storedAsset.blob);
+        parts.push({
+          inline_data: {
+            mime_type: 'image/webp',
+            data: base64Img.split(',')[1]
+          }
+        });
+      }
+    }
+
+    parts.push({
+      text: `You are an expert NCERT educator and master textbook author.
+Solve this question and provide a complete, rigorous, step-by-step textbook solution in clean Markdown with LaTeX math notation ($...$ for inline, $$...$$ for display equations).
+
+Question Reference: ${q.exercise} Question ${q.number}
+Question Statement:
+${q.questionText}
+${q.options?.length ? '\nOptions:\n' + q.options.map((o, i) => `(${String.fromCharCode(65+i)}) ${o}`).join('\n') : ''}`
+    });
+
+    const payload = {
+      contents: [{ parts }],
+      generationConfig: { temperature: 0.1 }
+    };
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    q.solutionText = data.candidates[0].content.parts[0].text || '';
+    q.status = 'solved';
+    q.lastModified = Date.now();
+
+    await storage.put('questions', q);
+    renderQuestionList();
+    if (activeEditingQ && activeEditingQ.id === q.id) {
+      $('edSolText').value = q.solutionText;
+      renderEditorPreviews();
+      updateReferencedAssets('edSolText');
+    }
+  } catch (err) {
+    alert(`Solving Q${q.number} failed: ` + err.message);
+    q.status = 'extracted';
+    renderQuestionList();
+  }
+}
+
+async function solveAllPending() {
+  for (const q of questionsList) {
+    if (q.status !== 'approved' && !q.solutionText) {
+      await solveQuestion(q.id);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 6. UI View Controls & Asset Helpers
+// ---------------------------------------------------------------------------
+function openPdfCropperFor(fieldId) {
+  cropTargetField = fieldId;
+  togglePdfDrawer();
+}
+
+function setSectionViewMode(section, mode) {
+  const wrap = $('wrap' + section + 'Split');
+  if (!wrap) return;
+
+  wrap.className = `split-view mode-${mode}`;
+  ['raw', 'split', 'rendered'].forEach(m => {
+    const btn = $(`btn${section}${m.charAt(0).toUpperCase() + m.slice(1)}`);
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+}
+
+function onEditorInput(fieldId) {
+  renderEditorPreviews();
+  updateReferencedAssets(fieldId);
+}
+
+function updateReferencedAssets(fieldId) {
+  const isQuestion = fieldId === 'edQText';
+  const strip = $(isQuestion ? 'edQAssetsStrip' : 'edSolAssetsStrip');
+  if (!strip) return;
+
+  const content = $(fieldId).value || '';
+  const matches = [...content.matchAll(/!\[.*?\]\((assets\/.*?)\)/g)];
+  const assetPaths = [...new Set(matches.map(m => m[1]))];
+
+  if (!assetPaths.length) {
+    strip.style.display = 'none';
+    strip.innerHTML = '';
+    return;
+  }
+
+  strip.style.display = 'flex';
+  strip.innerHTML = assetPaths.map(path => {
+    const url = sessionAssets.get(path) || '';
+    const filename = path.replace(/^assets\//, '');
+    return `
+      <div class="asset-card">
+        <img src="${url}" alt="${esc(filename)}">
+        <div class="asset-card-info">
+          <div class="asset-card-name" title="${esc(filename)}">${esc(filename)}</div>
+          <div style="color:var(--muted)">Attached Image</div>
+        </div>
+        <button class="btn-del-asset" onclick="deleteAsset('${path}', '${fieldId}')"><span class="material-symbols-outlined">delete</span> Delete</button>
+      </div>
+    `;
+  }).join('');
+}
+
+async function deleteAsset(assetPath, fieldId) {
+  if (!confirm(`Delete image asset "${assetPath.replace(/^assets\//, '')}"?`)) return;
+
+  if (fieldId) {
+    const ta = $(fieldId);
+    if (ta) {
+      const regex = new RegExp(`!\\[.*?\\]\\(${assetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)[\\r\\n]*`, 'g');
+      ta.value = ta.value.replace(regex, '').trim();
+    }
+  } else if (activeEditingQ) {
+    ['edQText', 'edSolText'].forEach(fid => {
+      const ta = $(fid);
+      if (ta) {
+        const regex = new RegExp(`!\\[.*?\\]\\(${assetPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)[\\r\\n]*`, 'g');
+        ta.value = ta.value.replace(regex, '').trim();
+      }
+    });
+  }
+
+  if (sessionAssets.has(assetPath)) {
+    URL.revokeObjectURL(sessionAssets.get(assetPath));
+    sessionAssets.delete(assetPath);
+  }
+
+  await storage.delete('assets', assetPath);
+
+  if (fieldId || activeEditingQ) {
+    renderEditorPreviews();
+    updateReferencedAssets('edQText');
+    updateReferencedAssets('edSolText');
+  }
+  renderQuestionList();
+}
+
+// ---------------------------------------------------------------------------
+// 7. Fullscreen Markdown Editor & Renderers
+// ---------------------------------------------------------------------------
+function openEditor(qId) {
+  activeEditingQ = questionsList.find(x => x.id === qId);
+  if (!activeEditingQ) return;
+
+  $('edQNum').textContent = `${activeEditingQ.exercise} Question ${activeEditingQ.number}`;
+  $('edQText').value = activeEditingQ.questionText;
+  $('edSolText').value = activeEditingQ.solutionText || '';
+
+  const badge = $('edQBadge');
+  badge.className = `badge ${activeEditingQ.status === 'approved' ? 'approved' : activeEditingQ.warn ? 'warn' : 'ok'}`;
+  badge.textContent = activeEditingQ.status === 'approved' ? '✓ Approved' : activeEditingQ.warn ? '⚠ Diagram Review' : 'Active';
+
+  $('editorModal').classList.add('open');
+  setModalBodyLock(true);
+  const drawer = $('pdfDrawer');
+  drawer.classList.remove('open');
+  const layout = $('fsLayout');
+  if (layout) layout.classList.remove('drawer-open');
+
+  renderEditorPreviews();
+  updateReferencedAssets('edQText');
+  updateReferencedAssets('edSolText');
+}
+
+function closeEditorModal() {
+  $('editorModal').classList.remove('open');
+  setModalBodyLock(false);
+  activeEditingQ = null;
+}
+
+function renderEditorPreviews() {
+  $('edQPreview').innerHTML = renderMarkdownAndMath($('edQText').value, 'edQText');
+  $('edSolPreview').innerHTML = renderMarkdownAndMath($('edSolText').value, 'edSolText');
+  document.querySelectorAll('.md-content').forEach(applyMath);
+}
+
+async function saveAndApproveActiveQuestion() {
+  if (!activeEditingQ) return;
+  activeEditingQ.questionText = $('edQText').value;
+  activeEditingQ.solutionText = $('edSolText').value;
+  activeEditingQ.warn = false;
+  activeEditingQ.status = 'approved';
+  activeEditingQ.lastModified = Date.now();
+
+  await storage.put('questions', activeEditingQ);
+  renderQuestionList();
+  closeEditorModal();
+}
+
+function solveActiveInEditor() {
+  if (!activeEditingQ) return;
+  activeEditingQ.questionText = $('edQText').value;
+  solveQuestion(activeEditingQ.id);
+}
+
+// ---------------------------------------------------------------------------
+// 8. 40% PDF Drawer & High-DPI Cropper Modal (Enhanced 2-Column Grid & Sharp DPI)
+// ---------------------------------------------------------------------------
+async function togglePdfDrawer() {
+  const drawer = $('pdfDrawer');
+  const layout = $('fsLayout');
+  const isOpen = drawer.classList.contains('open');
+  if (isOpen) {
+    drawer.classList.remove('open');
+    if (layout) layout.classList.remove('drawer-open');
+  } else {
+    drawer.classList.add('open');
+    if (layout) layout.classList.add('drawer-open');
+    renderPdfThumbnails();
+  }
+}
+
+async function renderPdfThumbnails() {
+  if (!activePdfDoc) return;
+  const container = $('pdfThumbnails');
+  container.innerHTML = '';
+
+  // Scale 0.95 (~95–100 DPI) for super crisp rendering inside 2-column compact grid
+  for (let pageNum = 1; pageNum <= activePdfDoc.numPages; pageNum++) {
+    const page = await activePdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 0.95 });
+
+    const card = document.createElement('div');
+    card.className = 'thumb-card';
+    card.innerHTML = `<b style="font-size:11px">Page ${pageNum}</b>`;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    card.appendChild(canvas);
+    card.onclick = () => openHighDpiCropper(pageNum);
+    container.appendChild(card);
+  }
+}
+
+let cropState = {
+  isDragging: false,
+  startX: 0,
+  startY: 0,
+  rect: { x: 0, y: 0, w: 0, h: 0 },
+  canvasScale: 2.5,
+  pageIndex: 1
+};
+
+async function openHighDpiCropper(pageNum) {
+  if (!activePdfDoc) return;
+  cropState.pageIndex = pageNum;
+  $('cropperPageTitle').textContent = `High-DPI Cropper — Page ${pageNum}`;
+  $('cropperModal').classList.add('open');
+  setModalBodyLock(true);
+
+  const page = await activePdfDoc.getPage(pageNum);
+  const dpr = window.devicePixelRatio || 1;
+  const configuredScale = parseFloat(localStorage.getItem('cropper_scale') || '2.5');
+  cropState.canvasScale = configuredScale * dpr;
+
+  const viewport = page.getViewport({ scale: cropState.canvasScale });
+  const canvas = $('cropCanvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  canvas.style.width = `${viewport.width / dpr}px`;
+  canvas.style.height = `${viewport.height / dpr}px`;
+
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  installCropperEvents();
+}
+
+function closeCropperModal() {
+  $('cropperModal').classList.remove('open');
+  $('selectionBox').style.display = 'none';
+  if (!$('editorModal').classList.contains('open')) {
+    setModalBodyLock(false);
+  }
+}
+
+function installCropperEvents() {
+  const container = $('cropContainer');
+  const box = $('selectionBox');
+
+  container.onmousedown = e => {
+    const rect = container.getBoundingClientRect();
+    cropState.isDragging = true;
+    cropState.startX = e.clientX - rect.left;
+    cropState.startY = e.clientY - rect.top;
+    box.style.display = 'block';
+    box.style.left = `${cropState.startX}px`;
+    box.style.top = `${cropState.startY}px`;
+    box.style.width = '0px';
+    box.style.height = '0px';
+  };
+
+  window.onmousemove = e => {
+    if (!cropState.isDragging) return;
+    const rect = container.getBoundingClientRect();
+    const curX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const curY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+
+    const x = Math.min(curX, cropState.startX);
+    const y = Math.min(curY, cropState.startY);
+    const w = Math.abs(curX - cropState.startX);
+    const h = Math.abs(curY - cropState.startY);
+
+    cropState.rect = { x, y, w, h };
+    box.style.left = `${x}px`;
+    box.style.top = `${y}px`;
+    box.style.width = `${w}px`;
+    box.style.height = `${h}px`;
+  };
+
+  window.onmouseup = () => { cropState.isDragging = false; };
+}
+
+async function confirmCropAndInsert() {
+  const { x, y, w, h } = cropState.rect;
+  if (w < 10 || h < 10) { alert('Please drag to select a region to crop.'); return; }
+
+  const sourceCanvas = $('cropCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const sx = x * dpr;
+  const sy = y * dpr;
+  const sw = w * dpr;
+  const sh = h * dpr;
+
+  const workCanvas = document.createElement('canvas');
+  workCanvas.width = sw;
+  workCanvas.height = sh;
+  const ctx = workCanvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  const quality = parseFloat(localStorage.getItem('webp_quality') || '0.80');
+
+  workCanvas.toBlob(async (blob) => {
+    if (!blob) return;
+
+    const targetField = cropTargetField || 'edQText';
+    const assetKey = `assets/${activeEditingQ.id}_fig_${Date.now()}.webp`;
+    await storage.put('assets', {
+      path: assetKey,
+      chapterId: currentChapterId,
+      blob: blob,
+      createdAt: Date.now()
+    });
+
+    sessionAssets.set(assetKey, URL.createObjectURL(blob));
+
+    insertSnippet(targetField, `\n\n![Figure](${assetKey})\n\n`, '');
+    onEditorInput(targetField);
+    closeCropperModal();
+    togglePdfDrawer();
+  }, 'image/webp', quality);
+}
+
+// ---------------------------------------------------------------------------
+// 9. Package Exporter (Continua Manifest JSON + Assets ZIP)
+// ---------------------------------------------------------------------------
+async function exportContinuaBundle() {
+  if (!questionsList.length) { alert('No questions to export.'); return; }
+
+  const groupsMap = new Map();
+  questionsList.forEach(q => {
+    const exName = q.exercise || 'General Exercise';
+    if (!groupsMap.has(exName)) groupsMap.set(exName, []);
+    groupsMap.get(exName).push(q);
+  });
+
+  let groupIndex = 1;
+  const groups = [];
+
+  for (const [friendlyName, qList] of groupsMap.entries()) {
+    const questions = qList.map((q, idx) => {
+      let structuredOpts = [];
+      if (q.options?.length) {
+        structuredOpts = q.options.map(opt => ({
+          text: opt.replace(/^\(?[A-Da-d]\)?[\s.:)-]+/, '').trim(),
+          isCorrect: q.solutionText ? q.solutionText.toLowerCase().includes(opt.toLowerCase().trim()) : false
+        }));
+      }
+
+      return {
+        displayOrder: idx + 1,
+        questionText: q.questionText,
+        solutionText: q.solutionText || '',
+        sourceInfo: `${friendlyName} Q${q.number}`,
+        options: structuredOpts
+      };
+    });
+
+    groups.push({
+      friendlyName: friendlyName,
+      displayOrder: groupIndex++,
+      questions: questions
+    });
+  }
+
+  const continuaImportJson = {
+    type: 'NCERT_SOLUTIONS',
+    groups: groups
+  };
+
+  const baseName = `${getChapterId()}_solutions`;
+  const jsonBlob = new Blob([JSON.stringify(continuaImportJson, null, 2)], { type: 'application/json' });
+  triggerFileDownload(jsonBlob, `${baseName}.json`);
+
+  const assets = await storage.getAllByIndex('assets', 'chapterId', currentChapterId);
+  if (assets.length && window.JSZip) {
+    const zip = new JSZip();
+    const folder = zip.folder('assets');
+
+    assets.forEach(a => {
+      const filename = a.path.replace(/^assets\//, '');
+      folder.file(filename, a.blob);
+    });
+
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    triggerFileDownload(zipBlob, `${baseName}_assets.zip`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 10. Grouped UI Rendering & Helper Utilities
+// ---------------------------------------------------------------------------
+function renderQuestionList() {
+  const container = $('groupsContainer');
+  const count = questionsList.length;
+  const approved = questionsList.filter(x => x.status === 'approved').length;
+  $('statsLabel').textContent = `${count} question${count !== 1 ? 's' : ''} (${approved} approved)`;
+
+  if (!count) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">No questions loaded. Upload a Chapter PDF and click <b>Extract Questions</b>.</div>';
+    return;
+  }
+
+  const groupMap = new Map();
+  questionsList.forEach(q => {
+    const ex = q.exercise || 'General Exercise';
+    if (!groupMap.has(ex)) groupMap.set(ex, []);
+    groupMap.get(ex).push(q);
+  });
+
+  container.innerHTML = Array.from(groupMap.entries()).map(([exName, qList]) => {
+    return `
+      <div class="group-section">
+        <div class="group-header">
+          <div class="group-title">
+            <span class="material-symbols-outlined">folder</span> <b>${esc(exName)}</b>
+            <span class="group-count">${qList.length} questions</span>
+          </div>
+        </div>
+        <div class="q-list">
+          ${qList.map(q => {
+            const isApproved = q.status === 'approved';
+            const isWarn = q.warn;
+            return `
+              <article class="q-card">
+                <div class="q-head">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <b>Question ${esc(q.number)}</b>
+                    <span class="badge ${isApproved ? 'approved' : isWarn ? 'warn' : 'ok'}">
+                      ${isApproved ? '✓ Approved' : isWarn ? '⚠ Diagram Review' : q.status === 'solving' ? '⚡ Solving...' : 'Extracted'}
+                    </span>
+                  </div>
+                  <div style="display:flex;gap:6px">
+                    <button class="small" onclick="solveQuestion('${q.id}')"><span class="material-symbols-outlined">bolt</span> Solve</button>
+                    <button class="small primary" onclick="openEditor('${q.id}')"><span class="material-symbols-outlined">edit</span> Edit / Crop</button>
+                  </div>
+                </div>
+                <div class="q-body md-content">${renderMarkdownAndMath(q.questionText)}</div>
+                ${q.solutionText ? `
+                  <div class="solution-view">
+                    <div style="font-size:11px;color:#93C5FD;font-weight:600;margin-bottom:6px">Publishing Solution:</div>
+                    <div class="md-content">${renderMarkdownAndMath(q.solutionText)}</div>
+                  </div>
+                ` : ''}
+              </article>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.querySelectorAll('.md-content').forEach(applyMath);
+}
+
+function renderMarkdownAndMath(content, sourceFieldId) {
+  if (!content) return '';
+  let txt = String(content);
+
+  for (const [path, url] of sessionAssets.entries()) {
+    txt = txt.split(path).join(url);
+  }
+
+  let html = '';
+  if (window.marked && typeof window.marked.parse === 'function') {
+    html = window.marked.parse(txt, { gfm: true, breaks: true });
+  } else {
+    html = esc(txt);
+  }
+
+  if (sourceFieldId) {
+    html = html.replace(/<img\s+src=["']([^"']+)["']\s*alt=["']([^"']*)["']\s*\/?>/g, (match, src, alt) => {
+      let matchedPath = '';
+      for (const [path, url] of sessionAssets.entries()) {
+        if (url === src || src.includes(path)) {
+          matchedPath = path;
+          break;
+        }
+      }
+      if (!matchedPath) return match;
+
+      return `
+        <span class="img-preview-container">
+          <img src="${src}" alt="${esc(alt)}">
+          <button class="img-del-overlay" onclick="deleteAsset('${matchedPath}', '${sourceFieldId}')"><span class="material-symbols-outlined">delete</span> Delete Image</button>
+        </span>
+      `;
+    });
+  }
+
+  return html;
+}
+
+function applyMath(el) {
+  if (window.renderMathInElement) {
+    renderMathInElement(el, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false }
+      ],
+      throwOnError: false
+    });
+  }
+}
+
+function insertSnippet(textareaId, before, after) {
+  const ta = $(textareaId);
+  const sStart = ta.selectionStart;
+  const sEnd = ta.selectionEnd;
+  const val = ta.value;
+  const sel = val.substring(sStart, sEnd);
+  ta.value = val.substring(0, sStart) + before + sel + after + val.substring(sEnd);
+  ta.focus();
+  ta.setSelectionRange(sStart + before.length, sEnd + before.length);
+  renderEditorPreviews();
+}
+
+function blobToBase64(blob) {
+  return new Promise(res => {
+    const reader = new FileReader();
+    reader.onloadend = () => res(reader.result);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function triggerFileDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+</script>
+</body>
+</html>
