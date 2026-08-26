@@ -253,6 +253,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
                 <button class="small" onclick="insertSnippet('edQText', '$$\n', '\n$$')">Display Eq ($$)</button>
                 <button class="small" onclick="insertSnippet('edQText', '**', '**')">Bold</button>
                 <button class="small primary" onclick="openPdfCropperFor('edQText')"><span class="material-symbols-outlined">add_photo_alternate</span> Add Image (PDF)</button>
+                <button class="small" onclick="triggerCustomImageUpload('edQText')"><span class="material-symbols-outlined">upload_file</span> Upload Image / SVG</button>
+                <button class="small" id="btnFixLatexQ" onclick="fixLatexWithGemini('edQText')"><span class="material-symbols-outlined">auto_fix_high</span> LaTeX Fix</button>
               </div>
               <textarea id="edQText" class="fs-textarea" style="min-height:140px" oninput="onEditorInput('edQText')"></textarea>
             </div>
@@ -287,7 +289,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
                 <button class="small" onclick="insertSnippet('edSolText', '**Proof:**\n', '')">Proof</button>
                 <button class="small" onclick="insertSnippet('edSolText', '\\frac{', '}{}')">Fraction</button>
                 <button class="small primary" onclick="openPdfCropperFor('edSolText')"><span class="material-symbols-outlined">add_photo_alternate</span> Add Diagram (PDF)</button>
+                <button class="small" onclick="triggerCustomImageUpload('edSolText')"><span class="material-symbols-outlined">upload_file</span> Upload Diagram / SVG</button>
+                <button class="small" id="btnFixLatexSol" onclick="fixLatexWithGemini('edSolText')"><span class="material-symbols-outlined">auto_fix_high</span> LaTeX Fix</button>
               </div>
+              <!-- Hidden Input for Custom Image/SVG Upload -->
+              <input type="file" id="customImgUploadInput" accept="image/*,.svg" style="display:none" onchange="handleCustomImageUpload(event)">
               <textarea id="edSolText" class="fs-textarea" style="min-height:180px" oninput="onEditorInput('edSolText')"></textarea>
             </div>
             <div class="preview-box">
@@ -343,20 +349,21 @@ button:disabled{opacity:.45;cursor:not-allowed}
     </div>
     
     <div class="field-group">
-      <label>Gemini API Key</label>
-      <input type="text" id="cfgApiKey" placeholder="AIzaSy...">
-      <div class="description" style="margin-top:4px">Stored locally in your browser (localStorage).</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin:0"><b>Gemini API Key Pool</b></label>
+        <button class="small" onclick="addApiKeyRow()"><span class="material-symbols-outlined">add</span> Add Key</button>
+      </div>
+      <div class="description" style="margin-bottom:8px">Add multiple API keys to balance requests and automatically bypass rate limits.</div>
+      <div id="cfgKeysContainer" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
     <div class="field-group">
-      <label>Extraction Model ID</label>
-      <input type="text" id="cfgExtractModel" value="gemini-2.5-flash">
-      <div class="description" style="margin-top:4px">Model used to parse chapter PDF into structured exercises/questions.</div>
+      <label>Extraction / LaTeX Fix Model ID</label>
+      <input type="text" id="cfgExtractModel" value="gemini-flash-lite-latest">
     </div>
-
     <div class="field-group">
-      <label>Solving Model ID</label>
-      <input type="text" id="cfgSolveModel" value="gemini-2.5-flash">
+      <label>Solver Model ID (Reasoning / Textbook Grade)</label>
+      <input type="text" id="cfgSolveModel" value="gemini-flash-latest">
       <div class="description" style="margin-top:4px">Model used for single-pass multimodal solution generation.</div>
     </div>
 
@@ -467,36 +474,97 @@ let activeEditingQ = null;
 let cropTargetField = 'edQText'; // Target textarea field for cropping insertion
 
 // ---------------------------------------------------------------------------
-// 2. Settings & Configuration Management
+// 2. Settings & Multi-Key Pool Management
 // ---------------------------------------------------------------------------
+function getApiKeys() {
+  try {
+    const raw = localStorage.getItem('gemini_api_keys');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+
+  const legacyKey = (localStorage.getItem('gemini_api_key') || '').trim();
+  if (legacyKey) {
+    const initial = [{ id: 'key_1', name: 'Default Key', key: legacyKey }];
+    localStorage.setItem('gemini_api_keys', JSON.stringify(initial));
+    return initial;
+  }
+  return [];
+}
+
+function saveApiKeys(keysArray) {
+  const valid = Array.isArray(keysArray) ? keysArray.filter(k => k && k.key && k.key.trim()) : [];
+  localStorage.setItem('gemini_api_keys', JSON.stringify(valid));
+  if (valid.length > 0) {
+    localStorage.setItem('gemini_api_key', valid[0].key.trim());
+  } else {
+    localStorage.removeItem('gemini_api_key');
+  }
+}
+
 function openSettingsModal() {
-  $('cfgApiKey').value = localStorage.getItem('gemini_api_key') || '';
-  $('cfgExtractModel').value = localStorage.getItem('gemini_extract_model') || 'gemini-2.5-flash';
-  $('cfgSolveModel').value = localStorage.getItem('gemini_solve_model') || 'gemini-2.5-flash';
-  $('cfgWebpQuality').value = localStorage.getItem('webp_quality') || '0.80';
+  const keys = getApiKeys();
+  const container = $('cfgKeysContainer');
+  container.innerHTML = '';
+
+  const displayKeys = keys.length > 0 ? keys : [{ id: 'key_1', name: 'Default Key', key: '' }];
+  displayKeys.forEach((k, idx) => {
+    addApiKeyRow(k.name || `Key ${idx + 1}`, k.key || '', k.id || `key_${Date.now()}_${idx}`);
+  });
+
+  $('cfgExtractModel').value = localStorage.getItem('gemini_extract_model') || 'gemini-flash-lite-latest';
+  $('cfgSolveModel').value = localStorage.getItem('gemini_solve_model') || 'gemini-flash-latest';
+  $('cfgWebpQuality').value = localStorage.getItem('webp_quality') || '0.85';
   $('cfgCropScale').value = localStorage.getItem('cropper_scale') || '2.5';
   $('settingsModal').classList.add('open');
   setModalBodyLock(true);
 }
 
+function addApiKeyRow(name = '', key = '', id = '') {
+  const container = $('cfgKeysContainer');
+  const rowId = id || `key_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+  const row = document.createElement('div');
+  row.id = rowId;
+  row.style.cssText = 'display:grid;grid-template-columns:130px 1fr 34px;gap:8px;align-items:center;background:var(--surface2);border:1px solid var(--border);padding:8px 10px;border-radius:6px;';
+  row.innerHTML = `
+    <input type="text" class="key-name-input" placeholder="Friendly Name" value="${name || 'Key'}" style="font-size:12px;padding:6px 8px">
+    <input type="password" class="key-val-input" placeholder="AIzaSy..." value="${key}" onfocus="this.type='text'" onblur="if(this.value) this.type='password'" style="font-size:12px;padding:6px 8px">
+    <button class="small" onclick="document.getElementById('${rowId}').remove()" style="padding:6px;color:var(--error);background:transparent;border:none" title="Remove Key">
+      <span class="material-symbols-outlined">delete</span>
+    </button>
+  `;
+  container.appendChild(row);
+}
+
 function closeSettingsModal() {
   $('settingsModal').classList.remove('open');
-  if (!$('editorModal').classList.contains('open') && !$('cropperModal').classList.contains('open')) {
-    setModalBodyLock(false);
-  }
+  setModalBodyLock(false);
 }
 
 function saveSettings() {
-  localStorage.setItem('gemini_api_key', $('cfgApiKey').value.trim());
-  localStorage.setItem('gemini_extract_model', $('cfgExtractModel').value.trim() || 'gemini-2.5-flash');
-  localStorage.setItem('gemini_solve_model', $('cfgSolveModel').value.trim() || 'gemini-2.5-flash');
-  localStorage.setItem('webp_quality', $('cfgWebpQuality').value.trim() || '0.80');
+  const rows = document.querySelectorAll('#cfgKeysContainer > div');
+  const keys = [];
+  rows.forEach(r => {
+    const name = r.querySelector('.key-name-input').value.trim() || 'Key';
+    const keyVal = r.querySelector('.key-val-input').value.trim();
+    if (keyVal) {
+      keys.push({ id: r.id, name, key: keyVal });
+    }
+  });
+
+  saveApiKeys(keys);
+  localStorage.setItem('gemini_extract_model', $('cfgExtractModel').value.trim() || 'gemini-flash-lite-latest');
+  localStorage.setItem('gemini_solve_model', $('cfgSolveModel').value.trim() || 'gemini-flash-latest');
+  localStorage.setItem('webp_quality', $('cfgWebpQuality').value.trim() || '0.85');
   localStorage.setItem('cropper_scale', $('cfgCropScale').value || '2.5');
   closeSettingsModal();
 }
 
-function getApiKey() {
-  return localStorage.getItem('gemini_api_key') || '';
+function hasValidApiKey() {
+  const keys = getApiKeys();
+  return keys.length > 0;
 }
 
 function getChapterId() {
@@ -509,7 +577,7 @@ function getChapterId() {
 
 window.addEventListener('DOMContentLoaded', async () => {
   await storage.init();
-  if (!getApiKey()) openSettingsModal();
+  if (!hasValidApiKey()) openSettingsModal();
   await loadActiveChapterData();
 });
 
@@ -539,6 +607,84 @@ async function loadActiveChapterData() {
 }
 
 // ---------------------------------------------------------------------------
+// Key Pool & Resilient Request Dispatcher
+// ---------------------------------------------------------------------------
+let keyRotationIndex = 0;
+const keyCooldowns = new Map();
+
+function markKeyRateLimited(keyStr, durationMs = 60000) {
+  keyCooldowns.set(keyStr, Date.now() + durationMs);
+}
+
+function isKeyInCooldown(keyStr) {
+  const expiry = keyCooldowns.get(keyStr);
+  if (!expiry) return false;
+  if (Date.now() > expiry) {
+    keyCooldowns.delete(keyStr);
+    return false;
+  }
+  return true;
+}
+
+async function executeGeminiWithRotation(modelId, payload) {
+  const keys = getApiKeys();
+  if (!keys.length) {
+    openSettingsModal();
+    throw new Error('No Gemini API Key found. Please add an API Key in Settings.');
+  }
+
+  const totalKeys = keys.length;
+  let attempts = 0;
+  let lastError = null;
+
+  while (attempts < totalKeys) {
+    const candidateIndex = (keyRotationIndex + attempts) % totalKeys;
+    const keyObj = keys[candidateIndex];
+    const keyStr = keyObj.key.trim();
+
+    if (isKeyInCooldown(keyStr) && totalKeys > 1) {
+      attempts++;
+      continue;
+    }
+
+    keyRotationIndex = (candidateIndex + 1) % totalKeys;
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(keyStr)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        return await res.json();
+      }
+
+      const errText = await res.text();
+      const isRateLimit = res.status === 429 || res.status === 503 || errText.includes('RESOURCE_EXHAUSTED') || errText.includes('quota') || errText.includes('rate limit');
+
+      if (isRateLimit) {
+        markKeyRateLimited(keyStr, 60000);
+        lastError = new Error(`Key "${keyObj.name || 'Key'}" hit rate limit (HTTP ${res.status}).`);
+        attempts++;
+        continue;
+      } else {
+        throw new Error(errText || `API request failed with status ${res.status}`);
+      }
+    } catch (err) {
+      if (err.message.includes('rate limit') || err.message.includes('RESOURCE_EXHAUSTED')) {
+        attempts++;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || new Error('All configured API Keys are currently rate-limited. Please wait a minute or add more keys in Settings.');
+}
+
+// ---------------------------------------------------------------------------
 // 3. PDF Upload & In-Browser Parsing
 // ---------------------------------------------------------------------------
 async function handlePdfUpload(e) {
@@ -564,11 +710,10 @@ async function handlePdfUpload(e) {
 // 4. Exercise Group-Aware Gemini In-Browser Extraction
 // ---------------------------------------------------------------------------
 async function extractQuestionsWithGemini() {
-  const key = getApiKey();
-  if (!key) { openSettingsModal(); return; }
+  if (!hasValidApiKey()) { openSettingsModal(); return; }
   if (!activePdfBuffer) return;
 
-  const modelId = localStorage.getItem('gemini_extract_model') || 'gemini-2.5-flash';
+  const modelId = localStorage.getItem('gemini_extract_model') || 'gemini-flash-lite-latest';
 
   $('extractBtn').disabled = true;
   $('extractBtn').textContent = `Extracting with ${modelId}...`;
@@ -705,7 +850,7 @@ async function solveQuestion(qId) {
   const key = getApiKey();
   if (!key) { openSettingsModal(); return; }
 
-  const modelId = localStorage.getItem('gemini_solve_model') || 'gemini-2.5-flash';
+  const modelId = localStorage.getItem('gemini_solve_model') || 'gemini-flash-latest';
 
   q.status = 'solving';
   renderQuestionList();
@@ -926,6 +1071,77 @@ function solveActiveInEditor() {
   solveQuestion(activeEditingQ.id);
 }
 
+async function fixLatexWithGemini(fieldId) {
+  const ta = $(fieldId);
+  if (!ta) return;
+  const originalText = ta.value;
+  if (!originalText.trim()) return;
+
+  const key = getApiKey();
+  if (!key) { openSettingsModal(); return; }
+
+  const modelId = localStorage.getItem('gemini_extract_model') || 'gemini-flash-lite-latest';
+  const isQ = fieldId === 'edQText';
+  const btn = $(isQ ? 'btnFixLatexQ' : 'btnFixLatexSol');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> Fixing...';
+  }
+
+  const LATEX_FIX_SYSTEM_PROMPT = `You are a strict LaTeX formatting engine and mathematical typography fixer.
+
+CRITICAL INSTRUCTIONS:
+- DO NOT SOLVE THE PROBLEM.
+- DO NOT ANSWER THE QUESTION.
+- DO NOT ADD WORKING STEPS, CALCULATIONS, REASONING, OR CONCLUSIONS.
+- DO NOT ALTER THE WORDING, MEANING, QUESTIONS, OR ANSWERS OF THE INPUT.
+- YOUR ONLY TASK IS TO FIX LATEX SYNTAX AND ENCLOSE MATHEMATICAL NOTATION IN VALID DELIMITERS.
+
+RULES:
+1. Preserve 100% of the input text, sentences, options, numbers, and document structure.
+2. Format inline math using \\( ... \\) or $ ... $.
+3. Format display equations using \\[ ... \\] or $$ ... $$.
+4. Fix broken LaTeX commands and syntax (e.g. frac -> \\frac, sqrt -> \\sqrt, times -> \\times, theta -> \\theta, degree -> ^\\circ, mismatched braces).
+5. STRICTLY PRESERVE all Markdown image links, diagram references (such as ![Figure](assets/...) or ![...](...)), and HTML tags. Do NOT alter asset paths.
+6. Output ONLY the formatted text with NO conversational introductory or concluding text.`;
+
+  const userMessage = `Text to reformat (DO NOT SOLVE, ONLY FIX LATEX/DELIMITERS):\n\n${originalText}`;
+
+  try {
+    const payload = {
+      system_instruction: {
+        parts: [{ text: LATEX_FIX_SYSTEM_PROMPT }]
+      },
+      contents: [{
+        parts: [{ text: userMessage }]
+      }],
+      generationConfig: { temperature: 0.0 }
+    };
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const fixedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (fixedText) {
+      ta.value = fixedText;
+      onEditorInput(fieldId);
+    }
+  } catch (err) {
+    alert('LaTeX Fix failed: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 8. 40% PDF Drawer & High-DPI Cropper Modal (Enhanced 2-Column Grid & Sharp DPI)
 // ---------------------------------------------------------------------------
@@ -1048,6 +1264,10 @@ function installCropperEvents() {
   window.onmouseup = () => { cropState.isDragging = false; };
 }
 
+function generate16BitHex() {
+  return Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+}
+
 async function confirmCropAndInsert() {
   const { x, y, w, h } = cropState.rect;
   if (w < 10 || h < 10) { alert('Please drag to select a region to crop.'); return; }
@@ -1066,13 +1286,14 @@ async function confirmCropAndInsert() {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
 
-  const quality = parseFloat(localStorage.getItem('webp_quality') || '0.80');
+  const quality = parseFloat(localStorage.getItem('webp_quality') || '0.85');
 
   workCanvas.toBlob(async (blob) => {
     if (!blob) return;
 
     const targetField = cropTargetField || 'edQText';
-    const assetKey = `assets/${activeEditingQ.id}_fig_${Date.now()}.webp`;
+    const hash = generate16BitHex();
+    const assetKey = `assets/${activeEditingQ.id}_${hash}.webp`;
     await storage.put('assets', {
       path: assetKey,
       chapterId: currentChapterId,
@@ -1087,6 +1308,81 @@ async function confirmCropAndInsert() {
     closeCropperModal();
     togglePdfDrawer();
   }, 'image/webp', quality);
+}
+
+let customUploadTargetField = 'edQText';
+function triggerCustomImageUpload(targetField = 'edQText') {
+  customUploadTargetField = targetField;
+  const input = $('customImgUploadInput');
+  if (input) {
+    input.value = '';
+    input.click();
+  }
+}
+
+async function handleCustomImageUpload(e) {
+  const file = e.target.files?.[0];
+  if (!file || !activeEditingQ) return;
+
+  try {
+    const isSvg = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+    let finalBlob = file;
+    let ext = 'svg';
+
+    if (!isSvg) {
+      ext = 'webp';
+      finalBlob = await new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          let { width, height } = img;
+          const maxDim = 1600;
+          if (width > maxDim || height > maxDim) {
+            if (width >= height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(b => resolve(b), 'image/webp', 0.85);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('Failed to load image for compression.'));
+        };
+        img.src = objectUrl;
+      });
+    }
+
+    if (!finalBlob) return;
+
+    const hash = generate16BitHex();
+    const assetKey = `assets/${activeEditingQ.id}_${hash}.${ext}`;
+
+    await storage.put('assets', {
+      path: assetKey,
+      chapterId: currentChapterId,
+      blob: finalBlob,
+      createdAt: Date.now()
+    });
+
+    sessionAssets.set(assetKey, URL.createObjectURL(finalBlob));
+    insertSnippet(customUploadTargetField, `\n\n![Figure](${assetKey})\n\n`, '');
+    onEditorInput(customUploadTargetField);
+  } catch (err) {
+    alert('Upload failed: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
 }
 
 // ---------------------------------------------------------------------------

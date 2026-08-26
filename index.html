@@ -161,6 +161,12 @@
             <button class="small primary" onclick="UI.openPdfDrawer('edQText')">
               <span class="material-symbols-outlined">add_photo_alternate</span> Add Image (PDF)
             </button>
+            <button class="small" onclick="UI.triggerCustomImageUpload('edQText')">
+              <span class="material-symbols-outlined">upload_file</span> Upload Image / SVG
+            </button>
+            <button class="small" id="btnFixLatexQ" onclick="UI.fixLatex('edQText')">
+              <span class="material-symbols-outlined">auto_fix_high</span> LaTeX Fix
+            </button>
           </div>
 
           <div class="editor-content-row" id="rowQ">
@@ -198,7 +204,16 @@
             <button class="small primary" onclick="UI.openPdfDrawer('edSolText')">
               <span class="material-symbols-outlined">add_photo_alternate</span> Add Diagram (PDF)
             </button>
+            <button class="small" onclick="UI.triggerCustomImageUpload('edSolText')">
+              <span class="material-symbols-outlined">upload_file</span> Upload Diagram / SVG
+            </button>
+            <button class="small" id="btnFixLatexSol" onclick="UI.fixLatex('edSolText')">
+              <span class="material-symbols-outlined">auto_fix_high</span> LaTeX Fix
+            </button>
           </div>
+
+          <!-- Hidden Input for Custom Image/SVG Upload -->
+          <input type="file" id="customImgUploadInput" accept="image/*,.svg" style="display:none" onchange="UI.handleCustomImageUpload(event)">
 
           <div class="editor-content-row" id="rowSol">
             <textarea id="edSolText" class="fs-textarea" style="min-height: 220px;" oninput="UI.renderEditorPreviews()"></textarea>
@@ -276,20 +291,25 @@
     
     <div class="settings-body">
       <div>
-        <label>Gemini API Key</label>
-        <input id="cfgApiKey" type="text" placeholder="AIzaSy...">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label style="margin-bottom:0"><b>Gemini API Key Pool</b></label>
+          <button class="small" onclick="UI.addApiKeyRow()"><span class="material-symbols-outlined">add</span> Add Key</button>
+        </div>
+        <div class="description" style="margin-top:2px;">Add multiple API keys to balance requests and automatically bypass rate limits.</div>
+        <div id="cfgKeysContainer" class="keys-container"></div>
       </div>
+
       <div>
-        <label>Extraction Model ID</label>
-        <input id="cfgExtractionModel" type="text" value="gemini-2.5-flash">
+        <label>Extraction / LaTeX Fix Model ID</label>
+        <input id="cfgExtractionModel" type="text" value="gemini-flash-lite-latest">
       </div>
       <div>
         <label>Solver Model ID</label>
-        <input id="cfgSolverModel" type="text" value="gemini-2.5-flash">
+        <input id="cfgSolverModel" type="text" value="gemini-flash-latest">
       </div>
       <div>
         <label>WebP Compression Quality (0.1 - 1.0)</label>
-        <input id="cfgWebpQuality" type="text" value="0.80">
+        <input id="cfgWebpQuality" type="text" value="0.85">
       </div>
     </div>
 

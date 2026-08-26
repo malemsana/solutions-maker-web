@@ -8,6 +8,7 @@ class AppController {
     this.questionsList = [];
     this.activeEditingQ = null;
     this.activeDrawerTargetField = 'edQText';
+    this.activeUploadTargetField = 'edQText';
 
     // Cropper State
     this.cropState = {
@@ -273,10 +274,59 @@ class AppController {
     this.closeEditorModal();
   }
 
+  async toggleApproveQuestion(qId) {
+    const q = this.questionsList.find(x => x.id === qId);
+    if (!q) return;
+
+    if (q.status === 'approved') {
+      q.status = q.solutionText ? 'solved' : 'extracted';
+    } else {
+      q.status = 'approved';
+      q.warn = false;
+    }
+    q.lastModified = Date.now();
+
+    await window.Storage.put('questions', q);
+    this.renderQuestionList();
+  }
+
   solveActiveInEditor() {
     if (!this.activeEditingQ) return;
     this.activeEditingQ.questionText = document.getElementById('edQText').value;
     this.solveQuestion(this.activeEditingQ.id);
+  }
+
+  async fixLatex(fieldId) {
+    const ta = document.getElementById(fieldId);
+    if (!ta) return;
+    const originalText = ta.value;
+    if (!originalText.trim()) return;
+
+    const cfg = window.Storage.getConfig();
+    if (!cfg.apiKey) { this.openSettingsModal(); return; }
+
+    const isQ = fieldId === 'edQText';
+    const btn = document.getElementById(isQ ? 'btnFixLatexQ' : 'btnFixLatexSol');
+    const originalHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> Fixing...';
+    }
+
+    try {
+      const fixedText = await window.Gemini.fixLatex(originalText, cfg);
+      if (fixedText) {
+        ta.value = fixedText;
+        this.renderEditorPreviews();
+      }
+    } catch (err) {
+      alert('LaTeX Fix failed: ' + err.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+    }
   }
 
   // --- 40% PDF Drawer & High-DPI Cropper ---
@@ -433,10 +483,11 @@ class AppController {
     };
 
     const cfg = window.Storage.getConfig();
-    const result = await window.Compressor.cropCanvasToWebP(sourceCanvas, cropCoords, cfg.webpQuality);
+    const result = await window.Compressor.cropCanvasToWebP(sourceCanvas, cropCoords, cfg.webpQuality || 0.85);
     if (!result) return;
 
-    const assetKey = `assets/${this.activeEditingQ.id}_fig_${Date.now()}.webp`;
+    const hash = window.Compressor.generate16BitHex();
+    const assetKey = `assets/${this.activeEditingQ.id}_${hash}.webp`;
     await window.Storage.put('assets', {
       path: assetKey,
       chapterId: this.currentChapterId,
@@ -452,6 +503,48 @@ class AppController {
 
     this.closeCropperModal();
     this.closePdfDrawer();
+  }
+
+  // --- Custom Image / SVG Upload ---
+  triggerCustomImageUpload(targetField = 'edQText') {
+    this.activeUploadTargetField = targetField;
+    const input = document.getElementById('customImgUploadInput');
+    if (input) {
+      input.value = '';
+      input.click();
+    }
+  }
+
+  async handleCustomImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file || !this.activeEditingQ) return;
+
+    try {
+      // Auto compress raster images (max dimension 1600px, 85% WebP) while keeping SVG uncompressed
+      const result = await window.Compressor.compressFileToWebP(file, 1600, 0.85);
+      if (!result) return;
+
+      const hash = window.Compressor.generate16BitHex();
+      const ext = result.ext || 'webp';
+      const assetKey = `assets/${this.activeEditingQ.id}_${hash}.${ext}`;
+
+      await window.Storage.put('assets', {
+        path: assetKey,
+        chapterId: this.currentChapterId,
+        blob: result.blob,
+        createdAt: Date.now()
+      });
+
+      this.sessionAssets.set(assetKey, result.dataUrl);
+
+      // Insert Markdown Link directly at active cursor
+      this.insertSnippet(this.activeUploadTargetField, `\n\n![Figure](${assetKey})\n\n`, '');
+      this.renderEditorPreviews();
+    } catch (err) {
+      alert('Image upload failed: ' + err.message);
+    } finally {
+      e.target.value = '';
+    }
   }
 
   // --- Continua Package Export ---
@@ -524,11 +617,34 @@ class AppController {
   // --- Settings & UI Helpers ---
   openSettingsModal() {
     const cfg = window.Storage.getConfig();
-    document.getElementById('cfgApiKey').value = cfg.apiKey;
+    const container = document.getElementById('cfgKeysContainer');
+    container.innerHTML = '';
+
+    const keys = cfg.apiKeys && cfg.apiKeys.length > 0 ? cfg.apiKeys : [{ id: 'key_1', name: 'Default Key', key: '' }];
+    keys.forEach((k, idx) => {
+      this.addApiKeyRow(k.name || `Key ${idx + 1}`, k.key || '', k.id || `key_${Date.now()}_${idx}`);
+    });
+
     document.getElementById('cfgExtractionModel').value = cfg.extractionModel;
     document.getElementById('cfgSolverModel').value = cfg.solverModel;
     document.getElementById('cfgWebpQuality').value = cfg.webpQuality;
     document.getElementById('settingsModal').classList.add('open');
+  }
+
+  addApiKeyRow(name = '', key = '', id = '') {
+    const container = document.getElementById('cfgKeysContainer');
+    const rowId = id || `key_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    const row = document.createElement('div');
+    row.className = 'key-row';
+    row.id = rowId;
+    row.innerHTML = `
+      <input type="text" class="key-name-input" placeholder="Friendly Name" value="${this.escapeHtml(name || 'Key')}">
+      <input type="password" class="key-val-input" placeholder="AIzaSy..." value="${this.escapeHtml(key)}" onfocus="this.type='text'" onblur="if(this.value) this.type='password'">
+      <button class="del-btn" onclick="document.getElementById('${rowId}').remove()" title="Remove Key">
+        <span class="material-symbols-outlined">delete</span>
+      </button>
+    `;
+    container.appendChild(row);
   }
 
   closeSettingsModal() {
@@ -536,11 +652,21 @@ class AppController {
   }
 
   saveSettings() {
+    const rows = document.querySelectorAll('#cfgKeysContainer .key-row');
+    const keys = [];
+    rows.forEach(r => {
+      const name = r.querySelector('.key-name-input').value.trim() || 'Key';
+      const keyVal = r.querySelector('.key-val-input').value.trim();
+      if (keyVal) {
+        keys.push({ id: r.id, name, key: keyVal });
+      }
+    });
+
     window.Storage.saveConfig({
-      apiKey: document.getElementById('cfgApiKey').value,
+      apiKeys: keys,
       extractionModel: document.getElementById('cfgExtractionModel').value,
       solverModel: document.getElementById('cfgSolverModel').value,
-      webpQuality: parseFloat(document.getElementById('cfgWebpQuality').value || '0.80')
+      webpQuality: parseFloat(document.getElementById('cfgWebpQuality').value || '0.85')
     });
     this.closeSettingsModal();
   }
@@ -569,6 +695,9 @@ class AppController {
               </span>
             </div>
             <div style="display:flex;gap:6px;">
+              <button class="small ${isApproved ? 'subtle' : ''}" onclick="UI.toggleApproveQuestion('${q.id}')" title="${isApproved ? 'Unapprove' : 'Approve'}">
+                <span class="material-symbols-outlined" style="${isApproved ? 'color:var(--success)' : ''}">${isApproved ? 'check_circle' : 'check'}</span> ${isApproved ? 'Approved' : 'Approve'}
+              </button>
               <button class="small" onclick="UI.solveQuestion('${q.id}')">
                 <span class="material-symbols-outlined">bolt</span> Solve
               </button>

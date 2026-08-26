@@ -71,18 +71,51 @@ class StorageService {
     });
   }
 
-  // LocalStorage Settings API
+  // LocalStorage Settings API with Multi-Key Pool Support
+  getApiKeys() {
+    try {
+      const raw = localStorage.getItem('gemini_api_keys');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+
+    // Legacy migration: check gemini_api_key
+    const legacyKey = (localStorage.getItem('gemini_api_key') || '').trim();
+    if (legacyKey) {
+      const initialKeys = [{ id: 'key_1', name: 'Default Key', key: legacyKey }];
+      localStorage.setItem('gemini_api_keys', JSON.stringify(initialKeys));
+      return initialKeys;
+    }
+    return [];
+  }
+
+  saveApiKeys(keysArray) {
+    const valid = Array.isArray(keysArray) ? keysArray.filter(k => k && k.key && k.key.trim()) : [];
+    localStorage.setItem('gemini_api_keys', JSON.stringify(valid));
+    if (valid.length > 0) {
+      localStorage.setItem('gemini_api_key', valid[0].key.trim());
+    } else {
+      localStorage.removeItem('gemini_api_key');
+    }
+  }
+
   getConfig() {
+    const keys = this.getApiKeys();
     return {
-      apiKey: localStorage.getItem('gemini_api_key') || '',
-      extractionModel: localStorage.getItem('gemini_extraction_model') || 'gemini-2.5-flash',
-      solverModel: localStorage.getItem('gemini_solver_model') || 'gemini-2.5-flash',
-      webpQuality: parseFloat(localStorage.getItem('webp_quality') || '0.80')
+      apiKeys: keys,
+      apiKey: keys.length > 0 ? keys[0].key : '',
+      extractionModel: localStorage.getItem('gemini_extraction_model') || 'gemini-flash-lite-latest',
+      solverModel: localStorage.getItem('gemini_solver_model') || 'gemini-flash-latest',
+      webpQuality: parseFloat(localStorage.getItem('webp_quality') || '0.85')
     };
   }
 
   saveConfig(cfg) {
-    if (cfg.apiKey !== undefined) localStorage.setItem('gemini_api_key', cfg.apiKey.trim());
+    if (cfg.apiKeys !== undefined) this.saveApiKeys(cfg.apiKeys);
+    else if (cfg.apiKey !== undefined) this.saveApiKeys([{ id: 'key_1', name: 'Default Key', key: cfg.apiKey.trim() }]);
+
     if (cfg.extractionModel !== undefined) localStorage.setItem('gemini_extraction_model', cfg.extractionModel.trim());
     if (cfg.solverModel !== undefined) localStorage.setItem('gemini_solver_model', cfg.solverModel.trim());
     if (cfg.webpQuality !== undefined) localStorage.setItem('webp_quality', String(cfg.webpQuality));

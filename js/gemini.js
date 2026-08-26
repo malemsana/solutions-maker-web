@@ -361,6 +361,105 @@ Do not use plain text where a mathematical LaTeX expression would be clearer.
 
 The final output must be valid, consistently formatted Markdown containing renderable LaTeX.`;
 
+class KeyPoolManager {
+  constructor() {
+    this.keyIndex = 0;
+    this.cooldowns = new Map(); // keyString -> cooldownExpiryTimestamp
+  }
+
+  getValidKeys(cfg) {
+    let keys = [];
+    if (Array.isArray(cfg?.apiKeys) && cfg.apiKeys.length > 0) {
+      keys = cfg.apiKeys.filter(k => k && k.key && k.key.trim());
+    } else if (cfg?.apiKey && cfg.apiKey.trim()) {
+      keys = [{ id: 'key_1', name: 'Default Key', key: cfg.apiKey.trim() }];
+    } else if (window.Storage) {
+      keys = window.Storage.getApiKeys();
+    }
+    return keys;
+  }
+
+  markRateLimited(keyStr, durationMs = 60000) {
+    const until = Date.now() + durationMs;
+    this.cooldowns.set(keyStr, until);
+    console.warn(`[KeyManager] Gemini API Key placed in cooldown for ${Math.round(durationMs / 1000)}s until ${new Date(until).toLocaleTimeString()}`);
+  }
+
+  isKeyInCooldown(keyStr) {
+    const expiry = this.cooldowns.get(keyStr);
+    if (!expiry) return false;
+    if (Date.now() > expiry) {
+      this.cooldowns.delete(keyStr);
+      return false;
+    }
+    return true;
+  }
+
+  // Attempts to execute fn(apiKey) rotating across available keys and handling 429/quota errors
+  async executeWithRotation(modelName, payload, cfg) {
+    const keys = this.getValidKeys(cfg);
+    if (!keys.length) {
+      throw new Error('No Gemini API Key found. Please add an API Key in Settings.');
+    }
+
+    const totalKeys = keys.length;
+    let attempts = 0;
+    let lastError = null;
+
+    // Filter out keys in cooldown if healthy keys exist
+    while (attempts < totalKeys) {
+      const candidateIndex = (this.keyIndex + attempts) % totalKeys;
+      const keyObj = keys[candidateIndex];
+      const keyStr = keyObj.key.trim();
+
+      if (this.isKeyInCooldown(keyStr) && totalKeys > 1) {
+        attempts++;
+        continue;
+      }
+
+      // Advance starting point for next general request (round-robin)
+      this.keyIndex = (candidateIndex + 1) % totalKeys;
+
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(keyStr)}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          return data;
+        }
+
+        const errText = await res.text();
+        const isRateLimit = res.status === 429 || res.status === 503 || errText.includes('RESOURCE_EXHAUSTED') || errText.includes('quota') || errText.includes('rate limit');
+
+        if (isRateLimit) {
+          this.markRateLimited(keyStr, 60000);
+          lastError = new Error(`Key "${keyObj.name || 'Key'}" hit rate limit (HTTP ${res.status}).`);
+          attempts++;
+          continue; // seamlessly try next key
+        } else {
+          // Unrecoverable request error (e.g. invalid argument, bad prompt)
+          throw new Error(errText || `API request failed with status ${res.status}`);
+        }
+      } catch (err) {
+        if (err.message.includes('rate limit') || err.message.includes('RESOURCE_EXHAUSTED')) {
+          attempts++;
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw lastError || new Error('All configured API Keys are currently rate-limited. Please wait a minute or add more keys in Settings.');
+  }
+}
+
+const keyPool = new KeyPoolManager();
+
 class GeminiService {
   static getBaseUrl(modelName, apiKey) {
     return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -421,14 +520,7 @@ Rules:
       }
     };
 
-    const res = await fetch(this.getBaseUrl(cfg.extractionModel, cfg.apiKey), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
+    const data = await keyPool.executeWithRotation(cfg.extractionModel, payload, cfg);
     const text = data.candidates[0].content.parts[0].text;
     return JSON.parse(text);
   }
@@ -463,16 +555,47 @@ ${questionObj.options?.length ? '\nOptions:\n' + questionObj.options.map((o, i) 
       generationConfig: { temperature: 0.1 }
     };
 
-    const res = await fetch(this.getBaseUrl(cfg.solverModel, cfg.apiKey), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const data = await keyPool.executeWithRotation(cfg.solverModel, payload, cfg);
+    return data.candidates[0].content.parts[0].text;
+  }
 
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
+  // Fast LaTeX Syntax & Formatting Fixer
+  static async fixLatex(text, cfg) {
+    if (!text || !text.trim()) return text;
+
+    const LATEX_FIX_SYSTEM_PROMPT = `You are a strict LaTeX formatting engine and mathematical typography fixer.
+
+CRITICAL INSTRUCTIONS:
+- DO NOT SOLVE THE PROBLEM.
+- DO NOT ANSWER THE QUESTION.
+- DO NOT ADD WORKING STEPS, CALCULATIONS, REASONING, OR CONCLUSIONS.
+- DO NOT ALTER THE WORDING, MEANING, QUESTIONS, OR ANSWERS OF THE INPUT.
+- YOUR ONLY TASK IS TO FIX LATEX SYNTAX AND ENCLOSE MATHEMATICAL NOTATION IN VALID DELIMITERS.
+
+RULES:
+1. Preserve 100% of the input text, sentences, options, numbers, and document structure.
+2. Format inline math using \\( ... \\) or $ ... $.
+3. Format display equations using \\[ ... \\] or $$ ... $$.
+4. Fix broken LaTeX commands and syntax (e.g. frac -> \\frac, sqrt -> \\sqrt, times -> \\times, theta -> \\theta, degree -> ^\\circ, mismatched braces).
+5. STRICTLY PRESERVE all Markdown image links, diagram references (such as ![Figure](assets/...) or ![...](...)), and HTML tags. Do NOT alter asset paths.
+6. Output ONLY the formatted text with NO conversational introductory or concluding text.`;
+
+    const userMessage = `Text to reformat (DO NOT SOLVE, ONLY FIX LATEX/DELIMITERS):\n\n${text}`;
+
+    const payload = {
+      system_instruction: {
+        parts: [{ text: LATEX_FIX_SYSTEM_PROMPT }]
+      },
+      contents: [{
+        parts: [{ text: userMessage }]
+      }],
+      generationConfig: { temperature: 0.0 }
+    };
+
+    const data = await keyPool.executeWithRotation(cfg.extractionModel, payload, cfg);
     return data.candidates[0].content.parts[0].text;
   }
 }
 
 window.Gemini = GeminiService;
+window.KeyPool = keyPool;
