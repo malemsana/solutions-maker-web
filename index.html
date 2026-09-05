@@ -86,9 +86,9 @@
         <span id="pdfFileLabel" class="file-label">No PDF loaded</span>
       </div>
       <div style="text-align: right;">
-        <button class="primary" id="extractBtn" onclick="UI.extractQuestions()" disabled>
-          <span class="material-symbols-outlined">document_scanner</span> Extract Questions (Gemini)
-        </button>
+          <button class="primary" id="extractBtn" onclick="UI.extractQuestions()" disabled>
+            <span class="material-symbols-outlined">document_scanner</span> Extract Questions (AI)
+          </button>
       </div>
     </div>
   </section>
@@ -102,7 +102,7 @@
       </div>
       <div>
         <button onclick="UI.solveAllPending()">
-          <span class="material-symbols-outlined">bolt</span> Solve All with Gemini
+          <span class="material-symbols-outlined">bolt</span> Solve All with AI
         </button>
       </div>
     </div>
@@ -122,7 +122,7 @@
     </div>
     <div class="head-btn-wrap">
       <button onclick="UI.solveActiveInEditor()">
-        <span class="material-symbols-outlined">bolt</span> Solve with Gemini
+        <span class="material-symbols-outlined">bolt</span> Solve with AI
       </button>
       <button class="primary" onclick="UI.saveAndApproveActiveQuestion()">
         <span class="material-symbols-outlined">check_circle</span> Approve &amp; Save
@@ -290,23 +290,55 @@
     </div>
     
     <div class="settings-body">
-      <div>
+      <div class="provider-block">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <label style="margin-bottom:0"><b>Gemini API Key Pool</b></label>
+          <label style="margin-bottom:0"><b>Gemini — API Key Pool</b></label>
           <button class="small" onclick="UI.addApiKeyRow()"><span class="material-symbols-outlined">add</span> Add Key</button>
         </div>
         <div class="description" style="margin-top:2px;">Add multiple API keys to balance requests and automatically bypass rate limits.</div>
         <div id="cfgKeysContainer" class="keys-container"></div>
       </div>
 
-      <div>
-        <label>Extraction / LaTeX Fix Model ID</label>
-        <input id="cfgExtractionModel" type="text" value="gemini-flash-lite-latest">
+      <div class="provider-block">
+        <label><b>OpenCode Zen — API Key</b></label>
+        <div class="description" style="margin-top:2px;">Optional. Enables Zen models via <span class="mono">https://opencode.ai/zen/v1</span>. Never exported with packages.</div>
+        <input id="cfgZenKey" type="password" placeholder="Zen API key (optional)"
+          onfocus="this.type='text'" onblur="if(this.value) this.type='password'">
       </div>
-      <div>
-        <label>Solver Model ID</label>
-        <input id="cfgSolverModel" type="text" value="gemini-flash-latest">
+
+      <div class="provider-block">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <label style="margin-bottom:0"><b>Detected Models</b></label>
+          <button class="small" id="refreshModelsBtn" onclick="UI.refreshModels()">
+            <span class="material-symbols-outlined">refresh</span> Refresh Models
+          </button>
+        </div>
+        <div id="modelStatusLabel" class="description" style="margin-top:4px;">Detecting models…</div>
       </div>
+
+      <div class="provider-block">
+        <label><b>Task Model Selection</b></label>
+        <div class="description" style="margin-top:2px;">Each task keeps an independent selection. Automatic uses that task's eligible pool.</div>
+
+        <div style="margin-top:10px;">
+          <label>Extraction Model</label>
+          <select id="cfgExtractionModelSelect"></select>
+          <div id="cfgExtractionModelNote" class="description model-note"></div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label>Solver Model</label>
+          <select id="cfgSolverModelSelect"></select>
+          <div id="cfgSolverModelNote" class="description model-note"></div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <label>LaTeX Fixer Model</label>
+          <select id="cfgLatexModelSelect"></select>
+          <div id="cfgLatexModelNote" class="description model-note"></div>
+        </div>
+      </div>
+
       <div>
         <label>WebP Compression Quality (0.1 - 1.0)</label>
         <input id="cfgWebpQuality" type="text" value="0.85">

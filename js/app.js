@@ -25,8 +25,38 @@ class AppController {
   async init() {
     await window.Storage.init();
     const cfg = window.Storage.getConfig();
-    if (!cfg.apiKey) this.openSettingsModal();
+    const hasProvider = (typeof window.Storage.hasAnyProvider === 'function')
+      ? window.Storage.hasAnyProvider()
+      : !!cfg.apiKey;
+    if (!hasProvider) this.openSettingsModal();
     await this.loadActiveChapterData();
+    // Discover models in the background; never block startup on one provider.
+    if (window.AI && typeof window.AI.refreshModels === 'function') {
+      window.AI.refreshModels()
+        .then(() => this.refreshModelSelectors())
+        .catch(() => this.refreshModelSelectors());
+    }
+  }
+
+  hasConfiguredProvider() {
+    try {
+      if (typeof window.Storage.hasAnyProvider === 'function') return window.Storage.hasAnyProvider();
+    } catch (e) { /* ignore */ }
+    const cfg = window.Storage.getConfig();
+    return !!(cfg.apiKey || cfg.zenApiKey || cfg.zen?.apiKey);
+  }
+
+  reportFallbackIfAny() {
+    try {
+      const st = window.AI?.getStatus?.();
+      const fb = st?.lastFallback;
+      if (fb?.fallbackUsed) {
+        console.warn(`[AI Router] Fallback used for task "${fb.task}": ${fb.reason}`);
+      }
+      return fb;
+    } catch (e) {
+      return null;
+    }
   }
 
   getChapterId() {
@@ -91,12 +121,12 @@ class AppController {
 
   async extractQuestions() {
     const cfg = window.Storage.getConfig();
-    if (!cfg.apiKey) { this.openSettingsModal(); return; }
+    if (!this.hasConfiguredProvider()) { this.openSettingsModal(); return; }
     if (!this.activePdfBuffer) return;
 
     const btn = document.getElementById('extractBtn');
     btn.disabled = true;
-    btn.textContent = 'Extracting via Gemini...';
+    btn.textContent = 'Extracting via AI...';
 
     try {
       const result = await window.Gemini.extractChapterQuestions(this.activePdfBuffer, cfg);
@@ -122,9 +152,10 @@ class AppController {
       this.renderQuestionList();
     } catch (err) {
       alert('Extraction failed: ' + err.message);
+      this.reportFallbackIfAny();
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '<span class="material-symbols-outlined">document_scanner</span> Extract Questions (Gemini)';
+      btn.innerHTML = '<span class="material-symbols-outlined">document_scanner</span> Extract Questions (AI)';
     }
   }
 
@@ -134,7 +165,7 @@ class AppController {
     if (!q) return;
 
     const cfg = window.Storage.getConfig();
-    if (!cfg.apiKey) { this.openSettingsModal(); return; }
+    if (!this.hasConfiguredProvider()) { this.openSettingsModal(); return; }
 
     q.status = 'solving';
     this.renderQuestionList();
@@ -149,6 +180,7 @@ class AppController {
       }
 
       q.solutionText = await window.Gemini.solveQuestion(q, imageBlobs, cfg);
+      this.reportFallbackIfAny();
       q.status = 'solved';
       q.lastModified = Date.now();
 
@@ -303,7 +335,7 @@ class AppController {
     if (!originalText.trim()) return;
 
     const cfg = window.Storage.getConfig();
-    if (!cfg.apiKey) { this.openSettingsModal(); return; }
+    if (!this.hasConfiguredProvider()) { this.openSettingsModal(); return; }
 
     const isQ = fieldId === 'edQText';
     const btn = document.getElementById(isQ ? 'btnFixLatexQ' : 'btnFixLatexSol');
@@ -315,6 +347,7 @@ class AppController {
 
     try {
       const fixedText = await window.Gemini.fixLatex(originalText, cfg);
+      this.reportFallbackIfAny();
       if (fixedText) {
         ta.value = fixedText;
         this.renderEditorPreviews();
@@ -625,10 +658,159 @@ class AppController {
       this.addApiKeyRow(k.name || `Key ${idx + 1}`, k.key || '', k.id || `key_${Date.now()}_${idx}`);
     });
 
-    document.getElementById('cfgExtractionModel').value = cfg.extractionModel;
-    document.getElementById('cfgSolverModel').value = cfg.solverModel;
+    const zenInput = document.getElementById('cfgZenKey');
+    if (zenInput) zenInput.value = cfg.zen?.apiKey || cfg.zenApiKey || '';
     document.getElementById('cfgWebpQuality').value = cfg.webpQuality;
     document.getElementById('settingsModal').classList.add('open');
+    this.refreshModelSelectors();
+    // Opportunistic background discovery while settings are open.
+    if (window.AI && typeof window.AI.refreshModels === 'function') {
+      this.setModelStatusLabel('Detecting models…');
+      window.AI.refreshModels()
+        .then(() => this.refreshModelSelectors())
+        .catch(() => this.refreshModelSelectors());
+    }
+  }
+
+  async refreshModels() {
+    const btn = document.getElementById('refreshModelsBtn');
+    if (btn) btn.disabled = true;
+    this.setModelStatusLabel('Detecting models…');
+    try {
+      if (window.AI && typeof window.AI.refreshModels === 'function') {
+        await window.AI.refreshModels();
+      }
+    } catch (err) {
+      this.setModelStatusLabel('Model refresh failed: ' + (err.message || err));
+    } finally {
+      this.refreshModelSelectors();
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  setModelStatusLabel(text) {
+    const el = document.getElementById('modelStatusLabel');
+    if (el) el.textContent = text;
+  }
+
+  updateModelStatusLabel() {
+    const el = document.getElementById('modelStatusLabel');
+    if (!el) return;
+    try {
+      const st = window.AI?.getStatus?.();
+      if (!st) {
+        el.textContent = 'Automatic — Best Available';
+        return;
+      }
+      const g = st.providers?.gemini;
+      const z = st.providers?.zen;
+      const fmt = (name, p) => {
+        if (!p || p.state === 'unknown') return `${name}: detecting…`;
+        if (p.state === 'no-keys') return `${name}: no key`;
+        if (p.state === 'available') return `${name}: ${p.count} model${p.count === 1 ? '' : 's'}`;
+        return `${name}: unavailable${p.error ? ` (${p.error})` : ''}`;
+      };
+      el.textContent = `${fmt('Gemini', g)} · ${fmt('Zen', z)} · total ${st.modelCount}`;
+    } catch (e) {
+      el.textContent = 'Automatic — Best Available';
+    }
+  }
+
+  taskKeyForSelector(task) {
+    if (task === 'extraction') return 'extraction';
+    if (task === 'solving') return 'solving';
+    return 'latexFix';
+  }
+
+  getSelectedModelForTask(task) {
+    try {
+      const policy = window.AI?.getRoutingPolicy?.() || window.Storage.getRouting();
+      const key = this.taskKeyForSelector(task);
+      const entry = policy?.[key];
+      if (entry?.mode === 'explicit' && entry.modelId) return entry.modelId;
+      return 'auto';
+    } catch (e) {
+      return 'auto';
+    }
+  }
+
+  buildModelSelectOptions(task) {
+    // Returns { html, note } for a task-specific selector.
+    const reqOpts = task === 'solving' ? { requiresVision: false } : {};
+    let models = [];
+    try {
+      if (window.AI?.getModelsForTask) {
+        models = window.AI.getModelsForTask(task, reqOpts);
+      } else if (window.AI?.getModels) {
+        models = window.AI.getModels();
+      }
+    } catch (e) {
+      models = [];
+    }
+    const selected = this.getSelectedModelForTask(task);
+    const eligible = models.filter(m => m.eligible !== false);
+    const ineligible = models.filter(m => m.eligible === false);
+    const byProvider = (list, provider) => list
+      .filter(m => m.provider === provider)
+      .sort((a, b) => String(a.displayName || a.sourceId).localeCompare(String(b.displayName || b.sourceId)));
+
+    const esc = s => this.escapeHtml(s);
+    const optFor = (m) => {
+      const freeTag = m.free === true ? ' · free' : '';
+      const unknownTag = (m.capabilities?.unknown?.length) ? ' · unknown caps' : '';
+      return `<option value="${esc(m.id)}">${esc(m.displayName || m.sourceId)}${esc(freeTag)}${esc(unknownTag)}</option>`;
+    };
+
+    let html = `<option value="auto">Automatic — Best Available</option>`;
+    for (const provider of ['gemini', 'zen']) {
+      const list = byProvider(eligible, provider);
+      if (!list.length) continue;
+      const label = provider === 'gemini' ? 'Gemini' : 'OpenCode Zen';
+      html += `<optgroup label="${esc(label)}">${list.map(optFor).join('')}</optgroup>`;
+    }
+    if (ineligible.length) {
+      const items = ineligible
+        .sort((a, b) => String(a.displayName || a.sourceId).localeCompare(String(b.displayName || b.sourceId)))
+        .map(m => `<option value="${esc(m.id)}" disabled>${esc(m.displayName || m.sourceId)} — ${esc(m.ineligibilityReason || 'incompatible')}</option>`)
+        .join('');
+      html += `<optgroup label="Incompatible with this task">${items}</optgroup>`;
+    }
+
+    // Preserve a previously saved explicit selection even if undiscovered.
+    let note = '';
+    if (selected !== 'auto' && !models.some(m => m.id === selected)) {
+      html += `<optgroup label="Unavailable"><option value="${esc(selected)}">Previously selected (unavailable): ${esc(selected)}</option></optgroup>`;
+      note = `Previously selected model is unavailable. Choose Automatic or another model. (${selected})`;
+    } else if (selected !== 'auto') {
+      const m = models.find(x => x.id === selected);
+      if (m && m.eligible === false) {
+        note = `Selected model may be incompatible: ${m.ineligibilityReason || ''}`;
+      }
+    }
+    if (!models.length) {
+      note = note || 'No models discovered yet. Automatic mode will use the first healthy provider at request time.';
+    }
+    return { html, note, selected };
+  }
+
+  refreshModelSelectors() {
+    const pairs = [
+      ['cfgExtractionModelSelect', 'cfgExtractionModelNote', 'extraction'],
+      ['cfgSolverModelSelect', 'cfgSolverModelNote', 'solving'],
+      ['cfgLatexModelSelect', 'cfgLatexModelNote', 'latex_fix']
+    ];
+    for (const [selectId, noteId, task] of pairs) {
+      const sel = document.getElementById(selectId);
+      if (!sel) continue;
+      const { html, note, selected } = this.buildModelSelectOptions(task);
+      sel.innerHTML = html;
+      // Restore this task's own selection only — never copy across tasks.
+      sel.value = selected;
+      if (sel.value !== selected) sel.value = 'auto';
+      const noteEl = document.getElementById(noteId);
+      if (noteEl) noteEl.textContent = note;
+    }
+    this.updateModelStatusLabel();
   }
 
   addApiKeyRow(name = '', key = '', id = '') {
@@ -662,13 +844,30 @@ class AppController {
       }
     });
 
+    const zenKey = document.getElementById('cfgZenKey')?.value?.trim() || '';
+    const readTaskSelect = (id) => {
+      const el = document.getElementById(id);
+      if (!el) return { mode: 'auto', modelId: null };
+      const v = el.value;
+      if (!v || v === 'auto') return { mode: 'auto', modelId: null };
+      return { mode: 'explicit', modelId: v };
+    };
+
     window.Storage.saveConfig({
       apiKeys: keys,
-      extractionModel: document.getElementById('cfgExtractionModel').value,
-      solverModel: document.getElementById('cfgSolverModel').value,
+      zenApiKey: zenKey,
+      routing: {
+        extraction: readTaskSelect('cfgExtractionModelSelect'),
+        solving: readTaskSelect('cfgSolverModelSelect'),
+        latexFix: readTaskSelect('cfgLatexModelSelect')
+      },
       webpQuality: parseFloat(document.getElementById('cfgWebpQuality').value || '0.85')
     });
     this.closeSettingsModal();
+    // Refresh registry against any new credentials (non-blocking).
+    if (window.AI && typeof window.AI.refreshModels === 'function') {
+      window.AI.refreshModels().catch(() => {});
+    }
   }
 
   renderQuestionList() {
